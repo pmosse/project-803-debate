@@ -1,0 +1,19 @@
+{
+  "name": "@debates/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "seed": "npx tsx seed-walmart.ts"
+  },
+  "dependencies": {
+    "postgres": "^3.4.5",
+    "drizzle-orm": "^0.38.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "@types/bcryptjs": "^2.4.6",
+    "typescript": "^5.7.0"
+  }
+}
