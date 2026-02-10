@@ -15,7 +15,7 @@ app = FastAPI(title="Debate Moderator", version="1.0.0")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://debates:debates@localhost:5433/debates")
 READING_INDEXER_URL = os.getenv("READING_INDEXER_URL", "http://localhost:8002")
 
-# Active sessions
+# Active sessions: session_id -> { "connections": set[WebSocket], "transcript": list, ... }
 sessions: dict[str, dict] = {}
 
 
@@ -82,6 +82,23 @@ def save_transcript(session_id: str, transcript: list):
         conn.close()
 
 
+async def broadcast(session_id: str, message: dict, exclude: WebSocket | None = None):
+    """Send a message to all connections in a session."""
+    session = sessions.get(session_id)
+    if not session:
+        return
+    dead = []
+    for ws in session["connections"]:
+        if ws is exclude:
+            continue
+        try:
+            await ws.send_json(message)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        session["connections"].discard(ws)
+
+
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
@@ -92,84 +109,101 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         await websocket.close()
         return
 
-    moderator = Moderator(
-        assignment_title=context["assignment_title"],
-        student_a_thesis=context["student_a_thesis"],
-        student_b_thesis=context["student_b_thesis"],
-        assignment_id=context["assignment_id"],
-        reading_indexer_url=READING_INDEXER_URL,
-    )
+    # Initialize or join existing session
+    if session_id not in sessions:
+        moderator = Moderator(
+            assignment_title=context["assignment_title"],
+            student_a_thesis=context["student_a_thesis"],
+            student_b_thesis=context["student_b_thesis"],
+            assignment_id=context["assignment_id"],
+            reading_indexer_url=READING_INDEXER_URL,
+        )
+        stt = DeepgramSTTHandler()
 
-    stt = DeepgramSTTHandler()
-    transcript: list[dict] = []
-    last_intervention_time = 0
-    current_phase = "opening_a"
+        sessions[session_id] = {
+            "connections": set(),
+            "moderator": moderator,
+            "stt": stt,
+            "transcript": [],
+            "last_intervention_time": 0,
+            "current_phase": "opening_a",
+        }
 
-    async def handle_stt_result(speaker: str, text: str, is_final: bool):
-        nonlocal last_intervention_time
+        async def handle_stt_result(speaker: str, text: str, is_final: bool):
+            s = sessions.get(session_id)
+            if not s:
+                return
 
-        # Send transcript to frontend
-        await websocket.send_json({
-            "type": "transcript",
-            "speaker": speaker,
-            "text": text,
-            "is_final": is_final,
-            "timestamp": time.time(),
-        })
-
-        if is_final and text.strip():
-            transcript.append({
+            msg = {
+                "type": "transcript",
                 "speaker": speaker,
                 "text": text,
+                "is_final": is_final,
                 "timestamp": time.time(),
-                "phase": current_phase,
-            })
+            }
+            # Broadcast transcript to all connections
+            await broadcast(session_id, msg)
 
-            # Check if moderation is appropriate (during cross-exam phases)
-            now = time.time()
-            if (
-                "crossexam" in current_phase
-                and now - last_intervention_time >= 30
-            ):
-                intervention = await moderator.evaluate_utterance(
-                    text, speaker, current_phase, transcript[-10:]
-                )
-                if intervention and intervention.get("should_intervene"):
-                    last_intervention_time = now
-                    await websocket.send_json({
-                        "type": "intervention",
-                        "intervention_type": intervention.get("intervention_type", "question"),
-                        "target_student": intervention.get("target_student", "both"),
-                        "message": intervention.get("message", ""),
-                    })
+            if is_final and text.strip():
+                s["transcript"].append({
+                    "speaker": speaker,
+                    "text": text,
+                    "timestamp": time.time(),
+                    "phase": s["current_phase"],
+                })
 
-            # Persist transcript periodically
-            if len(transcript) % 5 == 0:
-                save_transcript(session_id, transcript)
+                now = time.time()
+                if (
+                    "crossexam" in s["current_phase"]
+                    and now - s["last_intervention_time"] >= 30
+                ):
+                    intervention = await s["moderator"].evaluate_utterance(
+                        text, speaker, s["current_phase"], s["transcript"][-10:]
+                    )
+                    if intervention and intervention.get("should_intervene"):
+                        s["last_intervention_time"] = now
+                        await broadcast(session_id, {
+                            "type": "intervention",
+                            "intervention_type": intervention.get("intervention_type", "question"),
+                            "target_student": intervention.get("target_student", "both"),
+                            "message": intervention.get("message", ""),
+                        })
 
-    stt.on_result = handle_stt_result
+                if len(s["transcript"]) % 5 == 0:
+                    save_transcript(session_id, s["transcript"])
+
+        stt.on_result = handle_stt_result
+
+    session = sessions[session_id]
+    session["connections"].add(websocket)
 
     try:
         while True:
             data = await websocket.receive_json()
 
             if data["type"] == "audio":
-                # Forward audio to Deepgram STT
-                await stt.send_audio(data["audio"], data.get("speaker", "Unknown"))
+                await session["stt"].send_audio(data["audio"], data.get("speaker", "Unknown"))
 
             elif data["type"] == "phase_command":
-                current_phase = data.get("phase", current_phase)
+                session["current_phase"] = data.get("phase", session["current_phase"])
+
+            elif data["type"] == "phase_advance":
+                # Relay phase advance to all OTHER connections
+                await broadcast(session_id, {"type": "phase_advance"}, exclude=websocket)
 
             elif data["type"] == "end":
-                # Final transcript save
-                save_transcript(session_id, transcript)
+                save_transcript(session_id, session["transcript"])
                 break
 
     except WebSocketDisconnect:
-        # Save transcript on disconnect
-        save_transcript(session_id, transcript)
+        pass
     finally:
-        await stt.close()
+        session["connections"].discard(websocket)
+        # Clean up session if no more connections
+        if not session["connections"]:
+            save_transcript(session_id, session["transcript"])
+            await session["stt"].close()
+            del sessions[session_id]
 
 
 @app.get("/health")

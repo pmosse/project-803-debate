@@ -10,7 +10,7 @@ export function PhaseOverlay({ phase }: PhaseOverlayProps) {
   const config = PHASE_CONFIG[phase];
 
   return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
       <div className="animate-in fade-in zoom-in rounded-lg bg-white px-12 py-8 text-center shadow-2xl">
         <h2 className="text-2xl font-bold text-[#1D4F91]">{config.label}</h2>
         {config.duration > 0 && (

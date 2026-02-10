@@ -91,6 +91,8 @@ export function DebateSession({
           message: data.message,
           targetStudent: data.target_student,
         });
+      } else if (data.type === "phase_advance") {
+        store.advancePhase();
       }
     };
 
@@ -242,7 +244,13 @@ export function DebateSession({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => store.advancePhase()}
+          onClick={() => {
+            store.advancePhase();
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "phase_advance" }));
+            }
+          }}
           disabled={store.phase === "completed"}
           className="gap-1.5"
         >

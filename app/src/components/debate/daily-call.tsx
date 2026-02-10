@@ -127,7 +127,7 @@ function DailyCallInner({
   const remoteId = remoteIds[0] ?? null;
 
   return (
-    <div className="grid flex-1 grid-cols-2 gap-2 bg-gray-900 p-2">
+    <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-hidden bg-gray-900 p-2">
       {/* Local video */}
       <div className="relative overflow-hidden rounded-lg bg-gray-800">
         {localSessionId ? (
