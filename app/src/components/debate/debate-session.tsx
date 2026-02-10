@@ -9,7 +9,7 @@ import { ConsentModal } from "./consent-modal";
 import { PhaseOverlay } from "./phase-overlay";
 import { DailyCall } from "./daily-call";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward } from "lucide-react";
 
 interface DebateSessionProps {
   pairingId: string;
@@ -238,6 +238,16 @@ export function DebateSession({
           onClick={() => setCamEnabled(!camEnabled)}
         >
           {camEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => store.advancePhase()}
+          disabled={store.phase === "completed"}
+          className="gap-1.5"
+        >
+          <SkipForward className="h-4 w-4" />
+          <span className="text-xs">Next Phase</span>
         </Button>
         <Button
           variant="destructive"

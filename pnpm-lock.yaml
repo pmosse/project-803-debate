@@ -21,11 +21,11 @@ importers:
         specifier: ^3.700.0
         version: 3.985.0
       '@daily-co/daily-js':
-        specifier: ^0.74.0
-        version: 0.74.0
+        specifier: ^0.87.0
+        version: 0.87.0
       '@daily-co/daily-react':
-        specifier: ^0.21.0
-        version: 0.21.3(@daily-co/daily-js@0.74.0)(jotai@2.17.1(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)
+        specifier: ^0.24.0
+        version: 0.24.0(@daily-co/daily-js@0.87.0)(jotai@2.17.1(@types/react@19.2.13)(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@hookform/resolvers':
         specifier: ^3.9.0
         version: 3.10.0(react-hook-form@7.71.1(react@19.2.4))
@@ -391,17 +391,18 @@ packages:
     resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
     engines: {node: '>=6.9.0'}
 
-  '@daily-co/daily-js@0.74.0':
-    resolution: {integrity: sha512-wyZzt+sH7yh5Cg3DQeoZ1Yen8+bbai0/Zq8JZzklqELrpjiFuu34e3qwjwt79cx7T9eukbZbK6gtk3cmCBW3iw==}
+  '@daily-co/daily-js@0.87.0':
+    resolution: {integrity: sha512-hWHdBDvJwDeg8unz+XG9hD7xamuFi5Jmsk89ASATKL4fdTDHplpxi4PG9aaPXzBZYYLTjuxUje1K7B5uUR+gzw==}
     engines: {node: '>=10.0.0'}
 
-  '@daily-co/daily-react@0.21.3':
-    resolution: {integrity: sha512-N0x87Wk2I7OevIRoFWLHyMbyVgiDwXyuT5rL/aPj8y5zftcyube09PZN/ZWvkeG79+3XfgnfSZMpfbRVARVthA==}
+  '@daily-co/daily-react@0.24.0':
+    resolution: {integrity: sha512-eJH/EGicqtXcb33mua2kpZfowXL+zos2/s2lRMkENNZYBjlPNP2fNYqxx5FkK9grGc1gLfOUgULvONDOmfeFbg==}
     engines: {node: '>=12'}
     peerDependencies:
       '@daily-co/daily-js': '>=0.68.0 <1'
-      jotai: '>=2.9.3'
-      react: '>=16.13.1'
+      jotai: ^2
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0
+      react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
@@ -4329,7 +4330,7 @@ snapshots:
 
   '@babel/runtime@7.28.6': {}
 
-  '@daily-co/daily-js@0.74.0':
+  '@daily-co/daily-js@0.87.0':
     dependencies:
       '@babel/runtime': 7.28.6
       '@sentry/browser': 8.55.0
@@ -4337,13 +4338,14 @@ snapshots:
       dequal: 2.0.3
       events: 3.3.0
 
-  '@daily-co/daily-react@0.21.3(@daily-co/daily-js@0.74.0)(jotai@2.17.1(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)':
+  '@daily-co/daily-react@0.24.0(@daily-co/daily-js@0.87.0)(jotai@2.17.1(@types/react@19.2.13)(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      '@daily-co/daily-js': 0.74.0
+      '@daily-co/daily-js': 0.87.0
       fast-deep-equal: 3.1.3
       jotai: 2.17.1(@types/react@19.2.13)(react@19.2.4)
       lodash.throttle: 4.1.1
       react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
 
   '@drizzle-team/brocli@0.10.2': {}
 
