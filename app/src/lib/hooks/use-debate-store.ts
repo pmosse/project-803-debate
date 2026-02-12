@@ -63,6 +63,7 @@ interface DebateStore {
 
   setSession: (sessionId: string, pairingId: string) => void;
   setPhase: (phase: DebatePhase) => void;
+  syncPhase: (phase: DebatePhase, elapsed: number) => void;
   advancePhase: () => void;
   tick: () => void;
   addTranscript: (entry: TranscriptEntry) => void;
@@ -98,10 +99,20 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
       isGracePeriod: false,
       showPhaseOverlay: phase !== "waiting" && phase !== "consent" && phase !== "completed",
     });
-    // Auto-hide overlay after 3 seconds
     if (phase !== "waiting" && phase !== "consent" && phase !== "completed") {
       setTimeout(() => set({ showPhaseOverlay: false }), 3000);
     }
+  },
+
+  syncPhase: (phase, elapsed) => {
+    const config = PHASE_CONFIG[phase];
+    const remaining = Math.max(0, config.duration - elapsed);
+    set({
+      phase,
+      timeRemaining: remaining,
+      isGracePeriod: false,
+      showPhaseOverlay: false,
+    });
   },
 
   advancePhase: () => {
@@ -116,11 +127,13 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
     const { timeRemaining, isGracePeriod, phase } = get();
     if (phase === "waiting" || phase === "consent" || phase === "completed") return;
 
-    if (timeRemaining > 0) {
+    if (timeRemaining > 1) {
       set({ timeRemaining: timeRemaining - 1 });
+    } else if (timeRemaining === 1) {
+      set({ timeRemaining: 0 });
     } else if (!isGracePeriod) {
       set({ isGracePeriod: true, timeRemaining: GRACE_PERIOD });
-    } else if (timeRemaining <= 0) {
+    } else {
       // Grace period expired, advance
       get().advancePhase();
     }

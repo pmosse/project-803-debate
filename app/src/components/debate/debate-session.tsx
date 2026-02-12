@@ -10,6 +10,54 @@ import { PhaseOverlay } from "./phase-overlay";
 import { DailyCall } from "./daily-call";
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward } from "lucide-react";
+import type { DebatePhase } from "@/lib/hooks/use-debate-store";
+
+const PHASE_INSTRUCTIONS: Record<string, { you: string; opponent: string }> = {
+  opening_a: {
+    you: "Present your thesis and key arguments. Reference the assigned readings to support your position.",
+    opponent: "Listen carefully. Note claims you want to challenge during cross-examination.",
+  },
+  opening_b: {
+    you: "Present your thesis and key arguments. Reference the assigned readings to support your position.",
+    opponent: "Listen carefully. Note claims you want to challenge during cross-examination.",
+  },
+  rebuttal_a: {
+    you: "Address your opponent's strongest points. Explain why your position still holds.",
+    opponent: "Listen for any mischaracterizations of your argument.",
+  },
+  rebuttal_b: {
+    you: "Address your opponent's strongest points. Explain why your position still holds.",
+    opponent: "Listen for any mischaracterizations of your argument.",
+  },
+  closing_a: {
+    you: "Summarize your key arguments and why your position is stronger overall.",
+    opponent: "Prepare your own closing statement.",
+  },
+  closing_b: {
+    you: "Summarize your key arguments and why your position is stronger overall.",
+    opponent: "The debate is almost over.",
+  },
+};
+
+function PhaseInstructions({ phase, studentRole }: { phase: DebatePhase; studentRole: "A" | "B" }) {
+  const instructions = PHASE_INSTRUCTIONS[phase];
+  if (!instructions) return null;
+
+  const isMyTurn =
+    (phase.endsWith("_a") && studentRole === "A") ||
+    (phase.endsWith("_b") && studentRole === "B");
+
+  return (
+    <div className="border-t bg-blue-50 px-4 py-3">
+      <p className="text-sm font-medium text-blue-900">
+        {isMyTurn ? "Your turn" : "Opponent's turn"}
+      </p>
+      <p className="mt-1 text-sm text-blue-700">
+        {isMyTurn ? instructions.you : instructions.opponent}
+      </p>
+    </div>
+  );
+}
 
 interface DebateSessionProps {
   pairingId: string;
@@ -92,7 +140,18 @@ export function DebateSession({
           targetStudent: data.target_student,
         });
       } else if (data.type === "phase_advance") {
-        store.advancePhase();
+        const phase = data.phase as import("@/lib/hooks/use-debate-store").DebatePhase;
+        if (phase) {
+          store.setPhase(phase);
+        } else {
+          store.advancePhase();
+        }
+      } else if (data.type === "sync") {
+        const phase = data.phase as import("@/lib/hooks/use-debate-store").DebatePhase;
+        if (phase && phase !== "opening_a") {
+          // Late joiner — sync to current phase with elapsed time
+          store.syncPhase(phase, data.elapsed || 0);
+        }
       }
     };
 
@@ -219,11 +278,15 @@ export function DebateSession({
         </div>
       )}
 
-      {/* AI Moderator Bar */}
-      <AiModeratorBar interventions={store.interventions} />
-
-      {/* Transcript */}
-      <TranscriptPanel transcript={store.transcript} />
+      {/* Bottom panel: instructions during non-crossexam, transcript during crossexam */}
+      {store.phase.startsWith("crossexam") ? (
+        <>
+          <AiModeratorBar interventions={store.interventions} />
+          <TranscriptPanel transcript={store.transcript} />
+        </>
+      ) : (
+        <PhaseInstructions phase={store.phase} studentRole={studentRole} />
+      )}
 
       {/* Controls */}
       <div className="flex items-center justify-center gap-4 border-t bg-white px-4 py-3">
@@ -245,10 +308,13 @@ export function DebateSession({
           variant="outline"
           size="sm"
           onClick={() => {
-            store.advancePhase();
+            const currentConfig = PHASE_CONFIG[store.phase];
+            const nextPhase = currentConfig.next;
+            if (!nextPhase) return;
+            store.setPhase(nextPhase);
             const ws = wsRef.current;
             if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "phase_advance" }));
+              ws.send(JSON.stringify({ type: "phase_advance", phase: nextPhase }));
             }
           }}
           disabled={store.phase === "completed"}

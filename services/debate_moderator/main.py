@@ -127,6 +127,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             "transcript": [],
             "last_intervention_time": 0,
             "current_phase": "opening_a",
+            "phase_started_at": time.time(),
         }
 
         async def handle_stt_result(speaker: str, text: str, is_final: bool):
@@ -177,6 +178,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     session = sessions[session_id]
     session["connections"].add(websocket)
 
+    # Send current phase and elapsed time so late joiners sync up
+    elapsed = time.time() - session["phase_started_at"]
+    await websocket.send_json({
+        "type": "sync",
+        "phase": session["current_phase"],
+        "elapsed": round(elapsed),
+    })
+
     try:
         while True:
             data = await websocket.receive_json()
@@ -186,10 +195,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
             elif data["type"] == "phase_command":
                 session["current_phase"] = data.get("phase", session["current_phase"])
+                session["phase_started_at"] = time.time()
 
             elif data["type"] == "phase_advance":
-                # Relay phase advance to all OTHER connections
-                await broadcast(session_id, {"type": "phase_advance"}, exclude=websocket)
+                # Update server-side phase tracking
+                new_phase = data.get("phase", session["current_phase"])
+                session["current_phase"] = new_phase
+                session["phase_started_at"] = time.time()
+                # Relay to all OTHER connections
+                await broadcast(session_id, {
+                    "type": "phase_advance",
+                    "phase": new_phase,
+                }, exclude=websocket)
 
             elif data["type"] == "end":
                 save_transcript(session_id, session["transcript"])
