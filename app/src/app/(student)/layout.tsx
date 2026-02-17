@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { BookOpen } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import Link from "next/link";
+import Image from "next/image";
 
 export default async function StudentLayout({
   children,
@@ -16,10 +16,8 @@ export default async function StudentLayout({
     <div className="min-h-screen bg-[#F5F7FA]">
       <header className="bg-[#1D4F91] shadow-sm">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
-              <BookOpen className="h-4 w-4 text-white" />
-            </div>
+          <Link href="/dashboard" className="flex items-center gap-2.5">
+            <Image src="/icon.svg" alt="" width={28} height={28} className="rounded-md" />
             <span className="text-base font-semibold text-white">
               Project 803
             </span>

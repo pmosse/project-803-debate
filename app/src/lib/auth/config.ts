@@ -4,6 +4,12 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+
+export function generateImpersonateToken(studentId: string): string {
+  const secret = process.env.NEXTAUTH_SECRET || "dev-secret";
+  return crypto.createHmac("sha256", secret).update(studentId).digest("hex");
+}
 
 export const authConfig: NextAuthConfig = {
   providers: [
@@ -36,6 +42,38 @@ export const authConfig: NextAuthConfig = {
           email: user.email,
           role: user.role,
           courseCode: user.courseCode,
+        };
+      },
+    }),
+    Credentials({
+      id: "impersonate",
+      name: "Impersonate",
+      credentials: {
+        studentId: { type: "text" },
+        token: { type: "text" },
+      },
+      async authorize(credentials) {
+        const studentId = credentials?.studentId as string;
+        const token = credentials?.token as string;
+        if (!studentId || !token) return null;
+
+        const expected = generateImpersonateToken(studentId);
+        if (token !== expected) return null;
+
+        const [student] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, studentId))
+          .limit(1);
+
+        if (!student || student.role !== "student") return null;
+
+        return {
+          id: student.id,
+          name: student.name,
+          email: student.email,
+          role: student.role,
+          courseCode: student.courseCode,
         };
       },
     }),

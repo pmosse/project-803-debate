@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BookOpen, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
+import Image from "next/image";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,9 +44,7 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#1D4F91] via-[#2A6CB8] to-[#4F7CAC] p-12 flex-col justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-              <BookOpen className="h-5 w-5 text-white" />
-            </div>
+            <Image src="/icon.svg" alt="" width={36} height={36} className="rounded-lg" />
             <span className="text-xl font-semibold text-white">Project 803</span>
           </div>
         </div>
@@ -83,9 +82,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm animate-fade-in">
           {/* Mobile logo */}
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1D4F91]">
-              <BookOpen className="h-5 w-5 text-white" />
-            </div>
+            <Image src="/icon.svg" alt="" width={36} height={36} className="rounded-lg" />
             <span className="text-xl font-semibold text-gray-900">Project 803</span>
           </div>
 

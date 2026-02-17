@@ -6,14 +6,19 @@ import {
   memos,
   users,
   pairings,
+  debateSessions,
+  evaluations,
 } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PairingControls } from "@/components/instructor/pairing-controls";
+import { ResetCaseButton } from "@/components/instructor/reset-case-button";
+import { ResetDebateButton } from "@/components/instructor/reset-debate-button";
+import { ImpersonateButton } from "@/components/instructor/impersonate-button";
 import { Users as UsersIcon, FileText } from "lucide-react";
 
 export default async function InstructorAssignmentDetail({
@@ -49,6 +54,23 @@ export default async function InstructorAssignmentDetail({
     .select()
     .from(pairings)
     .where(eq(pairings.assignmentId, id));
+
+  // Fetch debate sessions for completed pairings (for Results tab)
+  const pairingIds = allPairings.map((p) => p.id);
+  const allDebateSessions = pairingIds.length > 0
+    ? await db
+        .select()
+        .from(debateSessions)
+        .where(inArray(debateSessions.pairingId, pairingIds))
+    : [];
+
+  const sessionIds = allDebateSessions.map((s) => s.id);
+  const allEvaluations = sessionIds.length > 0
+    ? await db
+        .select()
+        .from(evaluations)
+        .where(inArray(evaluations.debateSessionId, sessionIds))
+    : [];
 
   const studentData = students.map((student) => {
     const memo = allMemos.find((m) => m.studentId === student.id);
@@ -136,6 +158,23 @@ export default async function InstructorAssignmentDetail({
               </p>
             </CardContent>
           </Card>
+
+          <Card className="mt-4 border-red-200">
+            <CardHeader>
+              <CardTitle className="text-base text-red-700">Danger Zone</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Reset Case</p>
+                  <p className="text-xs text-gray-500">
+                    Delete all pairings, debates, and evaluations. Reset memos to analyzed state.
+                  </p>
+                </div>
+                <ResetCaseButton assignmentId={id} />
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="students">
@@ -190,12 +229,15 @@ export default async function InstructorAssignmentDetail({
                         )}
                       </td>
                       <td className="p-4">
-                        <Link
-                          href={`/instructor/student/${student.id}?assignment=${id}`}
-                          className="text-sm text-[#1D4F91] hover:underline"
-                        >
-                          View Details
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/instructor/student/${student.id}?assignment=${id}`}
+                            className="text-sm text-[#1D4F91] hover:underline"
+                          >
+                            View Details
+                          </Link>
+                          <ImpersonateButton studentId={student.id} studentName={student.name} />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -215,13 +257,71 @@ export default async function InstructorAssignmentDetail({
         </TabsContent>
 
         <TabsContent value="results">
-          <Card>
-            <CardContent className="py-8 text-center text-gray-500">
-              {completedCount === 0
-                ? "No debates completed yet."
-                : `${completedCount} debates completed. View individual student pages for detailed results.`}
-            </CardContent>
-          </Card>
+          {completedCount === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                No debates completed yet.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">
+                {completedCount} debate{completedCount !== 1 ? "s" : ""} completed.
+              </p>
+              {allPairings
+                .filter((p) => p.status === "completed")
+                .map((p) => {
+                  const studentA = students.find((s) => s.id === p.studentAId);
+                  const studentB = students.find((s) => s.id === p.studentBId);
+                  const session = allDebateSessions.find((s) => s.pairingId === p.id);
+                  const pairEvals = session
+                    ? allEvaluations.filter((e) => e.debateSessionId === session.id)
+                    : [];
+
+                  return (
+                    <Card key={p.id}>
+                      <CardContent className="py-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium text-gray-900">
+                                {studentA?.name || "Unknown"} vs {studentB?.name || "Unknown"}
+                              </span>
+                              <StatusBadge status={p.status} />
+                            </div>
+                            {session && (
+                              <p className="text-xs text-gray-500">
+                                Duration: {session.durationSeconds ? `${Math.round(session.durationSeconds / 60)}min` : "N/A"}
+                                {pairEvals.length > 0 && ` · ${pairEvals.length} evaluation${pairEvals.length !== 1 ? "s" : ""}`}
+                              </p>
+                            )}
+                            {pairEvals.map((ev) => {
+                              const evStudent = students.find((s) => s.id === ev.studentId);
+                              return (
+                                <div key={ev.id} className="mt-1 text-xs text-gray-600">
+                                  <span className="font-medium">{evStudent?.name}:</span>{" "}
+                                  {ev.passFail && <Badge variant={ev.passFail === "pass" ? "success" : ev.passFail === "fail" ? "error" : "secondary"}>{ev.passFail}</Badge>}
+                                  {ev.score && <span className="ml-2">Score: {ev.score}</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <ResetDebateButton pairingId={p.id} />
+                            <Link
+                              href={`/instructor/student/${p.studentAId}?assignment=${id}`}
+                              className="text-xs text-[#1D4F91] hover:underline"
+                            >
+                              Details
+                            </Link>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

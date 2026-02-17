@@ -8,6 +8,10 @@
   --bg: #FAFBFC;
 }
 
+button, [role="button"], a, select, summary {
+  cursor: pointer;
+}
+
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;

@@ -29,8 +29,8 @@ async function clusterAndPairWithClaude(
 
   const studentSummaries = studentMemos
     .map(
-      (m, i) =>
-        `Student ${i + 1} (ID: ${m.studentId}):
+      (m) =>
+        `${m.studentName} (ID: ${m.studentId}):
   - Position: ${m.position}
   - Thesis: ${m.thesis}
   - Key Claims: ${m.keyClaims.join("; ")}
@@ -63,7 +63,7 @@ Respond with valid JSON only, no markdown:
       "student_a_id": "...",
       "student_b_id": "...",
       "debate_topic": "A short phrase describing the core disagreement",
-      "reason": "One sentence explaining why these two should debate"
+      "reason": "One sentence explaining why these two should debate, referring to students by name"
     }
   ],
   "unpaired": ["student_id_1"]
@@ -72,8 +72,10 @@ Respond with valid JSON only, no markdown:
     ],
   });
 
-  const text =
+  let text =
     response.content[0].type === "text" ? response.content[0].text : "";
+  // Strip markdown code fences if Claude wraps the JSON
+  text = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
   const parsed = JSON.parse(text);
   return parsed;
 }

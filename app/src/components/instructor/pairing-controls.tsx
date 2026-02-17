@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Users, Send, ExternalLink, Copy, Check, RotateCcw } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Loader2, Users, Send, ExternalLink, Copy, Check, RotateCcw, Trash2 } from "lucide-react";
 
 interface PairingControlsProps {
   assignmentId: string;
@@ -26,7 +27,8 @@ export function PairingControls({
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetAllOpen, setResetAllOpen] = useState(false);
+  const [resetPairingOpen, setResetPairingOpen] = useState<string | null>(null);
 
   const studentMap = new Map(students.map((s) => [s.id, s]));
 
@@ -68,18 +70,21 @@ export function PairingControls({
   }
 
   async function handleResetPairing(pairingId: string) {
-    setResettingId(pairingId);
-    try {
-      const res = await fetch(`/api/pairings/${pairingId}/reset`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to reset");
-      router.refresh();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setResettingId(null);
-    }
+    const res = await fetch(`/api/pairings/${pairingId}/reset`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to reset");
+    router.refresh();
+  }
+
+  async function handleResetAllPairings() {
+    const res = await fetch("/api/pairings/reset-all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignmentId }),
+    });
+    if (!res.ok) throw new Error("Failed to reset pairings");
+    router.refresh();
   }
 
   function copyLink(pairingId: string) {
@@ -131,16 +136,26 @@ export function PairingControls({
             <h3 className="text-lg font-medium">
               {existingPairings.length} Pairs
             </h3>
-            <Button onClick={handleSendInvitations} disabled={loading}>
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  Send Invitations
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button onClick={handleSendInvitations} disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Send Invitations
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setResetAllOpen(true)}
+                className="text-red-600 border-red-200 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Reset All Pairings
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -183,18 +198,11 @@ export function PairingControls({
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleResetPairing(p.id)}
-                            disabled={resettingId === p.id}
+                            onClick={() => setResetPairingOpen(p.id)}
                             className="text-xs text-orange-600 border-orange-200 hover:bg-orange-50"
                           >
-                            {resettingId === p.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <>
-                                <RotateCcw className="h-3 w-3" />
-                                Reset
-                              </>
-                            )}
+                            <RotateCcw className="h-3 w-3" />
+                            Reset
                           </Button>
                         )}
                         <Button
@@ -254,6 +262,26 @@ export function PairingControls({
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={resetAllOpen}
+        onOpenChange={setResetAllOpen}
+        title="Reset All Pairings"
+        description={`This will delete all ${existingPairings.length} pairings along with their debate sessions and evaluations. You'll need to regenerate pairings afterward.`}
+        confirmLabel="Delete All Pairings"
+        variant="destructive"
+        onConfirm={handleResetAllPairings}
+      />
+
+      <ConfirmDialog
+        open={!!resetPairingOpen}
+        onOpenChange={(open) => !open && setResetPairingOpen(null)}
+        title="Reset Pairing"
+        description="This will delete the debate session for this pairing and reset it back to paired status. The students will need to debate again."
+        confirmLabel="Reset Pairing"
+        variant="warning"
+        onConfirm={() => handleResetPairing(resetPairingOpen!)}
+      />
     </div>
   );
 }

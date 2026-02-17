@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { BookOpen, LayoutDashboard, PlusCircle } from "lucide-react";
+import Image from "next/image";
+import { LayoutDashboard, PlusCircle, Users } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 
 export default async function InstructorLayout({
@@ -16,12 +17,10 @@ export default async function InstructorLayout({
   return (
     <div className="flex min-h-screen">
       <aside className="relative w-64 bg-[#0F2B4C] text-white">
-        <div className="flex h-16 items-center gap-2 border-b border-white/10 px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
-            <BookOpen className="h-4 w-4 text-white" />
-          </div>
+        <Link href="/instructor/dashboard" className="flex h-16 items-center gap-2.5 border-b border-white/10 px-6 hover:bg-white/5 transition-colors">
+          <Image src="/icon.svg" alt="" width={28} height={28} className="rounded-md" />
           <span className="text-lg font-semibold">Project 803</span>
-        </div>
+        </Link>
         <nav className="flex flex-col gap-1 p-4">
           <Link
             href="/instructor/dashboard"
@@ -29,6 +28,13 @@ export default async function InstructorLayout({
           >
             <LayoutDashboard className="h-4 w-4" />
             Dashboard
+          </Link>
+          <Link
+            href="/instructor/students"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <Users className="h-4 w-4" />
+            Students
           </Link>
           <Link
             href="/instructor/assignments/new"
