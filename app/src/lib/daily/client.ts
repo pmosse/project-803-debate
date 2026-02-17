@@ -18,6 +18,7 @@ export async function createRoom(roomName: string): Promise<DailyRoom> {
       name: roomName,
       properties: {
         enable_recording: "cloud",
+        enable_transcription: true,
         enable_chat: false,
         max_participants: 2,
         exp: Math.floor(Date.now() / 1000) + 86400 * 7, // 7 days
@@ -46,7 +47,7 @@ export async function createMeetingToken(
       properties: {
         room_name: roomName,
         user_name: userName,
-        is_owner: false,
+        is_owner: true,
         exp: Math.floor(Date.now() / 1000) + 86400, // 24 hours
       },
     }),

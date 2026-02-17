@@ -195,11 +195,15 @@ function getPhaseInstructions(
 function PhaseInstructions({
   phase,
   studentRole,
+  studentName,
+  opponentName,
   opponentThesis,
   opponentClaims,
 }: {
   phase: DebatePhase;
   studentRole: "A" | "B";
+  studentName: string;
+  opponentName: string;
   opponentThesis?: string;
   opponentClaims?: string[];
 }) {
@@ -210,10 +214,13 @@ function PhaseInstructions({
     (phase.endsWith("_a") && studentRole === "A") ||
     (phase.endsWith("_b") && studentRole === "B");
 
+  const myFirst = studentName.split(" ")[0];
+  const theirFirst = opponentName.split(" ")[0];
+
   return (
     <div className="border-t bg-blue-50 px-4 py-3">
       <p className="text-sm font-medium text-blue-900">
-        {isMyTurn ? "Your turn" : "Opponent's turn"}
+        {isMyTurn ? `${myFirst}, your turn` : `It's ${theirFirst}'s turn`}
       </p>
       <p className="mt-1 text-sm text-blue-700">
         {isMyTurn ? instructions.you : instructions.opponent}
@@ -250,6 +257,7 @@ export function DebateSession({
   const [camEnabled, setCamEnabled] = useState(true);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [dailyToken, setDailyToken] = useState<string | null>(null);
+  const [consentGiven, setConsentGiven] = useState(false);
 
   // Initialize session
   useEffect(() => {
@@ -310,6 +318,7 @@ export function DebateSession({
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "transcript") {
+        // Opponent's speech relayed via backend broadcast
         store.addTranscript({
           speaker: data.speaker,
           text: data.text,
@@ -326,9 +335,9 @@ export function DebateSession({
         });
       } else if (data.type === "phase_advance") {
         const phase = data.phase as import("@/lib/hooks/use-debate-store").DebatePhase;
-        if (phase) {
+        if (phase && phase !== store.phase) {
           store.setPhase(phase);
-        } else {
+        } else if (!phase) {
           store.advancePhase();
         }
       } else if (data.type === "sync") {
@@ -371,14 +380,32 @@ export function DebateSession({
       setDailyToken(token);
     }
 
-    // Start debate if both consented (simplified: start after own consent)
-    store.setPhase("opening_a");
-    await fetch(`/api/debates/${pairingId}/session`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "active" }),
-    });
+    // Mark consent given — join video but DON'T start timer yet.
+    // Timer starts when opponent joins (via onRemoteJoined).
+    setConsentGiven(true);
   }, [store, studentRole, pairingId]);
+
+  const handleTranscript = useCallback((event: { speaker: string; text: string; is_final: boolean }) => {
+    store.addTranscript({
+      speaker: event.speaker,
+      text: event.text,
+      timestamp: Date.now(),
+      phase: store.phase,
+      isFinal: event.is_final,
+    });
+  }, [store]);
+
+  const handleOpponentJoined = useCallback(async () => {
+    // Only start if debate hasn't begun yet
+    if (store.phase === "consent" || store.phase === "waiting") {
+      store.setPhase("opening_a");
+      await fetch(`/api/debates/${pairingId}/session`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "active" }),
+      });
+    }
+  }, [store, pairingId]);
 
   const handleLeave = useCallback(async () => {
     // Send end signal to moderator so it saves final transcript
@@ -407,8 +434,18 @@ export function DebateSession({
     wsRef.current?.close();
   }, [pairingId, store]);
 
-  // Consent screen
-  if (store.phase === "consent") {
+  // Loading state while session initializes
+  if (store.phase === "waiting") {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#1D4F91]" />
+        <p className="mt-3 text-sm text-gray-500">Preparing your debate...</p>
+      </div>
+    );
+  }
+
+  // Consent screen (only show if consent not yet given)
+  if (store.phase === "consent" && !consentGiven) {
     return <ConsentModal onAccept={handleConsent} />;
   }
 
@@ -416,6 +453,8 @@ export function DebateSession({
   if (store.phase === "completed") {
     return <DebateDebrief pairingId={pairingId} />;
   }
+
+  const isActiveDebate = store.phase !== "consent";
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
@@ -430,22 +469,28 @@ export function DebateSession({
             transcriptCount={store.transcript.filter((t) => t.isFinal).length}
           />
         </div>
-        <PhaseTimer
-          phase={store.phase}
-          timeRemaining={store.timeRemaining}
-          isGracePeriod={store.isGracePeriod}
-          nameA={studentRole === "A" ? studentName : opponentName}
-          nameB={studentRole === "B" ? studentName : opponentName}
-        />
+        {isActiveDebate ? (
+          <PhaseTimer
+            phase={store.phase}
+            timeRemaining={store.timeRemaining}
+            isGracePeriod={store.isGracePeriod}
+            nameA={studentRole === "A" ? studentName : opponentName}
+            nameB={studentRole === "B" ? studentName : opponentName}
+          />
+        ) : (
+          <span className="text-sm text-gray-400">Waiting for opponent...</span>
+        )}
       </div>
 
-      {/* Phase timeline */}
-      <PhaseTimeline
-        currentPhase={store.phase}
-        studentName={studentName}
-        opponentName={opponentName}
-        studentRole={studentRole}
-      />
+      {/* Phase timeline — only during active debate */}
+      {isActiveDebate && (
+        <PhaseTimeline
+          currentPhase={store.phase}
+          studentName={studentName}
+          opponentName={opponentName}
+          studentRole={studentRole}
+        />
+      )}
 
       {/* Phase overlay */}
       {store.showPhaseOverlay && (
@@ -462,9 +507,14 @@ export function DebateSession({
           roomUrl={roomUrl}
           token={dailyToken}
           studentRole={studentRole}
+          studentName={studentName}
+          opponentName={opponentName}
           micEnabled={micEnabled}
           camEnabled={camEnabled}
           wsRef={wsRef}
+          onRemoteJoined={handleOpponentJoined}
+          onTranscript={handleTranscript}
+          currentPhase={store.phase}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center bg-gray-900 text-gray-400">
@@ -472,19 +522,50 @@ export function DebateSession({
         </div>
       )}
 
-      {/* AI moderator bar — visible in all phases */}
-      <AiModeratorBar interventions={store.interventions} />
+      {/* AI moderator bar — visible in all active phases */}
+      {isActiveDebate && <AiModeratorBar interventions={store.interventions} />}
 
-      {/* Bottom panel: instructions during non-crossexam, transcript during crossexam */}
-      {store.phase.startsWith("crossexam") ? (
-        <TranscriptPanel transcript={store.transcript} />
-      ) : (
+      {/* Phase instructions (non-crossexam phases) */}
+      {isActiveDebate && !store.phase.startsWith("crossexam") && (
         <PhaseInstructions
           phase={store.phase}
           studentRole={studentRole}
+          studentName={studentName}
+          opponentName={opponentName}
           opponentThesis={opponentThesis}
           opponentClaims={opponentClaims}
         />
+      )}
+
+      {/* Live transcript — visible in all active phases */}
+      {isActiveDebate && (
+        <TranscriptPanel
+          transcript={store.transcript}
+          nameA={studentRole === "A" ? studentName : opponentName}
+          nameB={studentRole === "B" ? studentName : opponentName}
+        />
+      )}
+
+      {/* Floating skip button — visible when it's the active speaker's turn */}
+      {isActiveDebate && PHASE_CONFIG[store.phase].next && (
+        <div className="flex justify-center py-1.5 bg-gray-900/50">
+          <button
+            onClick={() => {
+              const currentConfig = PHASE_CONFIG[store.phase];
+              const nextPhase = currentConfig.next;
+              if (!nextPhase) return;
+              store.setPhase(nextPhase);
+              const ws = wsRef.current;
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "phase_advance", phase: nextPhase }));
+              }
+            }}
+            className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg hover:bg-white transition-colors backdrop-blur-sm"
+          >
+            <SkipForward className="h-4 w-4" />
+            Skip to next phase
+          </button>
+        </div>
       )}
 
       {/* Controls */}
@@ -502,25 +583,6 @@ export function DebateSession({
           onClick={() => setCamEnabled(!camEnabled)}
         >
           {camEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            const currentConfig = PHASE_CONFIG[store.phase];
-            const nextPhase = currentConfig.next;
-            if (!nextPhase) return;
-            store.setPhase(nextPhase);
-            const ws = wsRef.current;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: "phase_advance", phase: nextPhase }));
-            }
-          }}
-          disabled={!PHASE_CONFIG[store.phase].next}
-          className="gap-1.5"
-        >
-          <SkipForward className="h-4 w-4" />
-          <span className="text-xs">Next Phase</span>
         </Button>
         <Button
           variant="destructive"

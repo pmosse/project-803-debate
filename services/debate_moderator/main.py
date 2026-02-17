@@ -5,10 +5,11 @@ import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 import psycopg2
-from moderator import Moderator
-from stt_handler import DeepgramSTTHandler
 
+# Load .env BEFORE importing modules that read env vars at module level
 load_dotenv()
+
+from moderator import Moderator
 
 app = FastAPI(title="Debate Moderator", version="1.0.0")
 
@@ -118,12 +119,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             assignment_id=context["assignment_id"],
             reading_indexer_url=READING_INDEXER_URL,
         )
-        stt = DeepgramSTTHandler()
 
         sessions[session_id] = {
             "connections": set(),
             "moderator": moderator,
-            "stt": stt,
             "transcript": [],
             "last_intervention_time": 0,
             "current_phase": "opening_a",
@@ -132,52 +131,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             "silence_nudge_sent": False,
             "silence_task": None,
         }
-
-        async def handle_stt_result(speaker: str, text: str, is_final: bool):
-            s = sessions.get(session_id)
-            if not s:
-                return
-
-            msg = {
-                "type": "transcript",
-                "speaker": speaker,
-                "text": text,
-                "is_final": is_final,
-                "timestamp": time.time(),
-            }
-            # Broadcast transcript to all connections
-            await broadcast(session_id, msg)
-
-            if is_final and text.strip():
-                s["transcript"].append({
-                    "speaker": speaker,
-                    "text": text,
-                    "timestamp": time.time(),
-                    "phase": s["current_phase"],
-                })
-                s["last_speech_time"] = time.time()
-
-                now = time.time()
-                phase = s["current_phase"]
-                # Phase-aware cooldowns: 45s for opening/closing, 30s for crossexam/rebuttal
-                cooldown = 45 if ("opening" in phase or "closing" in phase) else 30
-                if now - s["last_intervention_time"] >= cooldown:
-                    intervention = await s["moderator"].evaluate_utterance(
-                        text, speaker, phase, s["transcript"][-10:]
-                    )
-                    if intervention and intervention.get("should_intervene"):
-                        s["last_intervention_time"] = now
-                        await broadcast(session_id, {
-                            "type": "intervention",
-                            "intervention_type": intervention.get("intervention_type", "question"),
-                            "target_student": intervention.get("target_student", "both"),
-                            "message": intervention.get("message", ""),
-                        })
-
-                if len(s["transcript"]) % 5 == 0:
-                    save_transcript(session_id, s["transcript"])
-
-        stt.on_result = handle_stt_result
 
         async def silence_monitor():
             """Check for silence every 5s; nudge if >15s silence during active phase."""
@@ -222,15 +175,63 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         while True:
             data = await websocket.receive_json()
 
-            if data["type"] == "audio":
-                await session["stt"].send_audio(data["audio"], data.get("speaker", "Unknown"))
+            if data["type"] == "transcript_text":
+                speaker = data.get("speaker", "Unknown")
+                text = data.get("text", "")
+                is_final = data.get("is_final", False)
+
+                # Broadcast to other client so they see transcripts in UI
+                await broadcast(session_id, {
+                    "type": "transcript",
+                    "speaker": speaker,
+                    "text": text,
+                    "is_final": is_final,
+                    "timestamp": time.time(),
+                }, exclude=websocket)
+
+                # Save final transcripts + run moderation
+                if is_final and text.strip():
+                    session["transcript"].append({
+                        "speaker": speaker,
+                        "text": text,
+                        "timestamp": time.time(),
+                        "phase": session["current_phase"],
+                    })
+                    session["last_speech_time"] = time.time()
+
+                    now = time.time()
+                    phase = session["current_phase"]
+                    cooldown = 45 if ("opening" in phase or "closing" in phase) else 30
+                    if now - session["last_intervention_time"] >= cooldown:
+                        intervention = await session["moderator"].evaluate_utterance(
+                            text, speaker, phase, session["transcript"][-10:]
+                        )
+                        if intervention and intervention.get("should_intervene"):
+                            session["last_intervention_time"] = now
+                            await broadcast(session_id, {
+                                "type": "intervention",
+                                "intervention_type": intervention.get("intervention_type", "question"),
+                                "target_student": intervention.get("target_student", "both"),
+                                "message": intervention.get("message", ""),
+                            })
+
+                    if len(session["transcript"]) % 5 == 0:
+                        save_transcript(session_id, session["transcript"])
 
             elif data["type"] == "phase_command":
                 new_phase = data.get("phase", session["current_phase"])
+                old_phase = session["current_phase"]
                 session["current_phase"] = new_phase
                 session["phase_started_at"] = time.time()
                 session["last_speech_time"] = time.time()
                 session["silence_nudge_sent"] = False
+
+                # Broadcast phase change to other clients (sync timers)
+                if new_phase != old_phase:
+                    await broadcast(session_id, {
+                        "type": "phase_advance",
+                        "phase": new_phase,
+                    }, exclude=websocket)
 
                 # Generate AI phase prompt on transition
                 if new_phase not in ("waiting", "consent", "completed"):
@@ -267,7 +268,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             save_transcript(session_id, session["transcript"])
             if session.get("silence_task"):
                 session["silence_task"].cancel()
-            await session["stt"].close()
             del sessions[session_id]
 
 
