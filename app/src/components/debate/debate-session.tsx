@@ -7,40 +7,203 @@ import { TranscriptPanel } from "./transcript-panel";
 import { AiModeratorBar } from "./ai-moderator-bar";
 import { ConsentModal } from "./consent-modal";
 import { PhaseOverlay } from "./phase-overlay";
+import { DebateDebrief } from "./debate-debrief";
 import { DailyCall } from "./daily-call";
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward } from "lucide-react";
 import type { DebatePhase } from "@/lib/hooks/use-debate-store";
+import { Check, Bot, WifiOff, Loader2 } from "lucide-react";
 
-const PHASE_INSTRUCTIONS: Record<string, { you: string; opponent: string }> = {
-  opening_a: {
-    you: "Present your thesis and key arguments. Reference the assigned readings to support your position.",
-    opponent: "Listen carefully. Note claims you want to challenge during cross-examination.",
-  },
-  opening_b: {
-    you: "Present your thesis and key arguments. Reference the assigned readings to support your position.",
-    opponent: "Listen carefully. Note claims you want to challenge during cross-examination.",
-  },
-  rebuttal_a: {
-    you: "Address your opponent's strongest points. Explain why your position still holds.",
-    opponent: "Listen for any mischaracterizations of your argument.",
-  },
-  rebuttal_b: {
-    you: "Address your opponent's strongest points. Explain why your position still holds.",
-    opponent: "Listen for any mischaracterizations of your argument.",
-  },
-  closing_a: {
-    you: "Summarize your key arguments and why your position is stronger overall.",
-    opponent: "Prepare your own closing statement.",
-  },
-  closing_b: {
-    you: "Summarize your key arguments and why your position is stronger overall.",
-    opponent: "The debate is almost over.",
-  },
-};
+function AiStatusIndicator({
+  connectionStatus,
+  transcriptCount,
+}: {
+  connectionStatus: "disconnected" | "connecting" | "connected";
+  transcriptCount: number;
+}) {
+  if (connectionStatus === "disconnected") {
+    return (
+      <div className="flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1">
+        <WifiOff className="h-3 w-3 text-red-600" />
+        <span className="text-[11px] font-medium text-red-700">AI Offline</span>
+      </div>
+    );
+  }
 
-function PhaseInstructions({ phase, studentRole }: { phase: DebatePhase; studentRole: "A" | "B" }) {
-  const instructions = PHASE_INSTRUCTIONS[phase];
+  if (connectionStatus === "connecting") {
+    return (
+      <div className="flex items-center gap-1.5 rounded-full bg-yellow-100 px-2.5 py-1">
+        <Loader2 className="h-3 w-3 animate-spin text-yellow-600" />
+        <span className="text-[11px] font-medium text-yellow-700">Connecting...</span>
+      </div>
+    );
+  }
+
+  // Connected
+  const hasTranscripts = transcriptCount > 0;
+  return (
+    <div className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1">
+      <Bot className="h-3 w-3 text-emerald-600" />
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+      </span>
+      <span className="text-[11px] font-medium text-emerald-700">
+        {hasTranscripts ? "Listening" : "AI Ready"}
+      </span>
+    </div>
+  );
+}
+
+/** Visible debate phases grouped for the timeline (no waiting/consent/completed). */
+const TIMELINE_PHASES: { key: DebatePhase; group: string; suffix: "a" | "b" }[] = [
+  { key: "opening_a", group: "Opening", suffix: "a" },
+  { key: "opening_b", group: "Opening", suffix: "b" },
+  { key: "crossexam_a", group: "Cross-Exam", suffix: "a" },
+  { key: "crossexam_b", group: "Cross-Exam", suffix: "b" },
+  { key: "rebuttal_a", group: "Rebuttal", suffix: "a" },
+  { key: "rebuttal_b", group: "Rebuttal", suffix: "b" },
+  { key: "closing_a", group: "Closing", suffix: "a" },
+  { key: "closing_b", group: "Closing", suffix: "b" },
+];
+
+function phaseIndex(phase: DebatePhase): number {
+  return TIMELINE_PHASES.findIndex((p) => p.key === phase);
+}
+
+function PhaseTimeline({
+  currentPhase,
+  studentName,
+  opponentName,
+  studentRole,
+}: {
+  currentPhase: DebatePhase;
+  studentName: string;
+  opponentName: string;
+  studentRole: "A" | "B";
+}) {
+  const currentIdx = phaseIndex(currentPhase);
+  const firstName = (name: string) => name.split(" ")[0];
+  const myFirst = firstName(studentName);
+  const theirFirst = firstName(opponentName);
+
+  return (
+    <div className="border-b bg-gray-50 px-4 py-2">
+      <div className="flex items-center gap-1">
+        {TIMELINE_PHASES.map((p, i) => {
+          const isActive = p.key === currentPhase;
+          const isDone = currentIdx > i;
+          const isMine =
+            (p.suffix === "a" && studentRole === "A") ||
+            (p.suffix === "b" && studentRole === "B");
+          const speakerLabel = isMine ? myFirst : theirFirst;
+
+          return (
+            <div key={p.key} className="flex flex-1 flex-col items-center">
+              {/* Dot / check */}
+              <div
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                  isActive
+                    ? "bg-[#1D4F91] text-white ring-2 ring-[#1D4F91]/30"
+                    : isDone
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-200 text-gray-400"
+                }`}
+              >
+                {isDone ? <Check className="h-3.5 w-3.5" /> : i + 1}
+              </div>
+              {/* Label */}
+              <span
+                className={`mt-1 text-center text-[10px] leading-tight ${
+                  isActive ? "font-semibold text-[#1D4F91]" : "text-gray-400"
+                }`}
+              >
+                {p.group}
+                <br />
+                <span className={isActive ? "text-[#1D4F91]" : "text-gray-300"}>
+                  {speakerLabel}
+                </span>
+              </span>
+              {/* Connector line (between dots) */}
+              {i < TIMELINE_PHASES.length - 1 && (
+                <div
+                  className={`absolute mt-3 h-0.5 w-full ${
+                    isDone ? "bg-green-400" : "bg-gray-200"
+                  }`}
+                  style={{ display: "none" }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function getPhaseInstructions(
+  phase: string,
+  opponentThesis?: string,
+  opponentClaims?: string[]
+): { you: string; opponent: string } | null {
+  const claimsList = opponentClaims?.length
+    ? opponentClaims.slice(0, 2).join("; ")
+    : null;
+
+  const instructions: Record<string, { you: string; opponent: string }> = {
+    opening_a: {
+      you: opponentThesis
+        ? `Present your thesis and key arguments. Your opponent argues: "${opponentThesis}"`
+        : "Present your thesis and key arguments. Reference the assigned readings to support your position.",
+      opponent: "Listen carefully. Note claims you want to challenge during cross-examination.",
+    },
+    opening_b: {
+      you: opponentThesis
+        ? `Present your thesis and key arguments. Your opponent argues: "${opponentThesis}"`
+        : "Present your thesis and key arguments. Reference the assigned readings to support your position.",
+      opponent: "Listen carefully. Note claims you want to challenge during cross-examination.",
+    },
+    rebuttal_a: {
+      you: claimsList
+        ? `Address their strongest points: ${claimsList}. Explain why your position still holds.`
+        : "Address your opponent's strongest points. Explain why your position still holds.",
+      opponent: "Listen for any mischaracterizations of your argument.",
+    },
+    rebuttal_b: {
+      you: claimsList
+        ? `Address their strongest points: ${claimsList}. Explain why your position still holds.`
+        : "Address your opponent's strongest points. Explain why your position still holds.",
+      opponent: "Listen for any mischaracterizations of your argument.",
+    },
+    closing_a: {
+      you: opponentThesis
+        ? `Summarize why your position holds despite your opponent's argument that "${opponentThesis}".`
+        : "Summarize your key arguments and why your position is stronger overall.",
+      opponent: "Prepare your own closing statement.",
+    },
+    closing_b: {
+      you: opponentThesis
+        ? `Summarize why your position holds despite your opponent's argument that "${opponentThesis}".`
+        : "Summarize your key arguments and why your position is stronger overall.",
+      opponent: "The debate is almost over.",
+    },
+  };
+
+  return instructions[phase] || null;
+}
+
+function PhaseInstructions({
+  phase,
+  studentRole,
+  opponentThesis,
+  opponentClaims,
+}: {
+  phase: DebatePhase;
+  studentRole: "A" | "B";
+  opponentThesis?: string;
+  opponentClaims?: string[];
+}) {
+  const instructions = getPhaseInstructions(phase, opponentThesis, opponentClaims);
   if (!instructions) return null;
 
   const isMyTurn =
@@ -65,6 +228,9 @@ interface DebateSessionProps {
   roomUrl: string;
   studentRole: "A" | "B";
   studentName: string;
+  opponentName: string;
+  opponentThesis?: string;
+  opponentClaims?: string[];
 }
 
 export function DebateSession({
@@ -73,6 +239,9 @@ export function DebateSession({
   roomUrl,
   studentRole,
   studentName,
+  opponentName,
+  opponentThesis,
+  opponentClaims,
 }: DebateSessionProps) {
   const store = useDebateStore();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -117,10 +286,26 @@ export function DebateSession({
   useEffect(() => {
     if (!store.sessionId) return;
     const moderatorUrl = process.env.NEXT_PUBLIC_DEBATE_MODERATOR_URL;
-    if (!moderatorUrl) return;
+    if (!moderatorUrl) {
+      store.setConnectionStatus("disconnected");
+      return;
+    }
 
+    store.setConnectionStatus("connecting");
     const ws = new WebSocket(`${moderatorUrl}/ws/${store.sessionId}`);
     wsRef.current = ws;
+
+    ws.onopen = () => {
+      store.setConnectionStatus("connected");
+    };
+
+    ws.onerror = () => {
+      store.setConnectionStatus("disconnected");
+    };
+
+    ws.onclose = () => {
+      store.setConnectionStatus("disconnected");
+    };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -227,39 +412,48 @@ export function DebateSession({
     return <ConsentModal onAccept={handleConsent} />;
   }
 
-  // Completed screen
+  // Completed screen with AI debrief
   if (store.phase === "completed") {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
-        <div className="rounded-lg bg-green-50 p-8">
-          <h2 className="text-xl font-semibold text-green-800">
-            Debate Completed
-          </h2>
-          <p className="mt-2 text-green-600">
-            Your instructor will review the results.
-          </p>
-        </div>
-      </div>
-    );
+    return <DebateDebrief pairingId={pairingId} />;
   }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b bg-white px-4 py-2">
-        <span className="text-sm font-medium text-gray-700">
-          DEBATE: {assignmentTitle}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-700">
+            DEBATE: {assignmentTitle}
+          </span>
+          <AiStatusIndicator
+            connectionStatus={store.connectionStatus}
+            transcriptCount={store.transcript.filter((t) => t.isFinal).length}
+          />
+        </div>
         <PhaseTimer
           phase={store.phase}
           timeRemaining={store.timeRemaining}
           isGracePeriod={store.isGracePeriod}
+          nameA={studentRole === "A" ? studentName : opponentName}
+          nameB={studentRole === "B" ? studentName : opponentName}
         />
       </div>
 
+      {/* Phase timeline */}
+      <PhaseTimeline
+        currentPhase={store.phase}
+        studentName={studentName}
+        opponentName={opponentName}
+        studentRole={studentRole}
+      />
+
       {/* Phase overlay */}
       {store.showPhaseOverlay && (
-        <PhaseOverlay phase={store.phase} />
+        <PhaseOverlay
+          phase={store.phase}
+          nameA={studentRole === "A" ? studentName : opponentName}
+          nameB={studentRole === "B" ? studentName : opponentName}
+        />
       )}
 
       {/* Video area */}
@@ -278,14 +472,19 @@ export function DebateSession({
         </div>
       )}
 
+      {/* AI moderator bar — visible in all phases */}
+      <AiModeratorBar interventions={store.interventions} />
+
       {/* Bottom panel: instructions during non-crossexam, transcript during crossexam */}
       {store.phase.startsWith("crossexam") ? (
-        <>
-          <AiModeratorBar interventions={store.interventions} />
-          <TranscriptPanel transcript={store.transcript} />
-        </>
+        <TranscriptPanel transcript={store.transcript} />
       ) : (
-        <PhaseInstructions phase={store.phase} studentRole={studentRole} />
+        <PhaseInstructions
+          phase={store.phase}
+          studentRole={studentRole}
+          opponentThesis={opponentThesis}
+          opponentClaims={opponentClaims}
+        />
       )}
 
       {/* Controls */}
@@ -317,7 +516,7 @@ export function DebateSession({
               ws.send(JSON.stringify({ type: "phase_advance", phase: nextPhase }));
             }
           }}
-          disabled={store.phase === "completed"}
+          disabled={!PHASE_CONFIG[store.phase].next}
           className="gap-1.5"
         >
           <SkipForward className="h-4 w-4" />

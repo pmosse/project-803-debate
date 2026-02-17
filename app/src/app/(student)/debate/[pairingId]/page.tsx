@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { pairings, assignments } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { pairings, assignments, memos, users } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { DebateSession } from "@/components/debate/debate-session";
 
 export default async function DebatePage({
@@ -33,6 +33,30 @@ export default async function DebatePage({
     .where(eq(assignments.id, pairing.assignmentId))
     .limit(1);
 
+  // Fetch opponent name and memo analysis for personalized instructions
+  const opponentId = isStudentA ? pairing.studentBId : pairing.studentAId;
+  const [opponent] = await db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, opponentId))
+    .limit(1);
+
+  const opponentName = opponent?.name || "Opponent";
+
+  const [opponentMemo] = await db
+    .select({ analysis: memos.analysis })
+    .from(memos)
+    .where(
+      and(
+        eq(memos.assignmentId, pairing.assignmentId),
+        eq(memos.studentId, opponentId)
+      )
+    )
+    .limit(1);
+
+  const opponentThesis = opponentMemo?.analysis?.thesis || "";
+  const opponentClaims = opponentMemo?.analysis?.key_claims || [];
+
   if (pairing.status === "completed") {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
@@ -55,6 +79,9 @@ export default async function DebatePage({
       roomUrl={pairing.debateRoomUrl || ""}
       studentRole={isStudentA ? "A" : "B"}
       studentName={session.user.name}
+      opponentName={opponentName}
+      opponentThesis={opponentThesis}
+      opponentClaims={opponentClaims}
     />
   );
 }

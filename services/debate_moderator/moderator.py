@@ -17,22 +17,45 @@ RECENT TRANSCRIPT:
 RELEVANT READING PASSAGES:
 {reading_context}
 
-Your role:
-1. If a student makes a vague claim, generate a specific follow-up question that forces them to cite a reading
-2. If a student misstates a finding from one of the readings, flag it gently
-3. Suggest cross-examination questions that probe the weakest parts of each student's argument
-4. Keep interventions brief (1-2 sentences max)
-5. Only intervene when necessary — let the students drive the conversation
+PHASE-SPECIFIC BEHAVIOR:
+{phase_instructions}
+
+General rules:
+- Keep interventions brief (1-2 sentences max)
+- Only intervene when genuinely necessary — let the students drive the conversation
+- If a student misquotes or contradicts a reading, use "fact_check" and include the actual passage
 
 Output JSON:
 {{
   "should_intervene": true/false,
-  "intervention_type": "question" | "flag" | "redirect" | "none",
+  "intervention_type": "question" | "flag" | "redirect" | "fact_check" | "none",
   "target_student": "A" | "B" | "both",
   "message": "Your intervention text"
 }}
 
 Return ONLY valid JSON."""
+
+PHASE_BEHAVIOR = {
+    "opening": "Only intervene if the speaker makes a factually incorrect claim about a reading. Do NOT interrupt their flow otherwise.",
+    "crossexam": "Actively suggest follow-up questions when answers are vague. Flag unsupported claims. Probe the weakest parts of each argument.",
+    "rebuttal": "Flag any mischaracterization of the opponent's argument. Otherwise stay silent.",
+    "closing": "Almost entirely silent. Only intervene if a student introduces new evidence not previously discussed.",
+}
+
+PHASE_PROMPT_TEMPLATE = """You are an AI debate moderator. Generate a single brief contextual instruction (1 sentence, max 20 words) for the start of this debate phase.
+
+PHASE: {phase}
+STUDENT A THESIS: {student_a_thesis}
+STUDENT B THESIS: {student_b_thesis}
+
+Phase guidance:
+- opening_a/opening_b: Tell the speaker to present their thesis. Mention what the opponent argues.
+- crossexam_a: Student A questions Student B. Hint at a weak point in B's argument.
+- crossexam_b: Student B questions Student A. Hint at a weak point in A's argument.
+- rebuttal_a/rebuttal_b: Tell the speaker to address their opponent's strongest claims.
+- closing_a/closing_b: Tell the speaker to summarize why their position holds.
+
+Return ONLY the instruction text, no JSON, no quotes."""
 
 
 class Moderator:
@@ -73,6 +96,13 @@ class Moderator:
             pass
         return "No reading passages available."
 
+    def _get_phase_instructions(self, phase: str) -> str:
+        """Return phase-specific moderation instructions."""
+        for key, instructions in PHASE_BEHAVIOR.items():
+            if key in phase:
+                return instructions
+        return PHASE_BEHAVIOR["crossexam"]
+
     async def evaluate_utterance(
         self,
         utterance: str,
@@ -94,10 +124,10 @@ class Moderator:
             phase=phase,
             recent_transcript=transcript_text,
             reading_context=reading_context,
+            phase_instructions=self._get_phase_instructions(phase),
         )
 
         try:
-            # Use Haiku for speed during live moderation
             response = client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=256,
@@ -112,4 +142,44 @@ class Moderator:
             return json.loads(text)
         except Exception as e:
             print(f"Moderation error: {e}")
+            return None
+
+    async def generate_phase_prompt(self, phase: str) -> str | None:
+        """Generate a contextual nudge for a phase transition."""
+        prompt = PHASE_PROMPT_TEMPLATE.format(
+            phase=phase,
+            student_a_thesis=self.student_a_thesis,
+            student_b_thesis=self.student_b_thesis,
+        )
+
+        try:
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=100,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.content[0].text.strip()
+        except Exception as e:
+            print(f"Phase prompt error: {e}")
+            return None
+
+    async def generate_silence_nudge(self, phase: str, speaker: str) -> str | None:
+        """Generate a nudge for a silent speaker."""
+        thesis = self.student_a_thesis if speaker == "A" else self.student_b_thesis
+        prompt = (
+            f"A student (Student {speaker}) has been silent for 15+ seconds during the {phase} phase. "
+            f"Their thesis is: {thesis}. "
+            f"Generate a single brief, encouraging prompt (1 sentence, max 15 words) to re-engage them. "
+            f"Reference their own argument to prompt a response. Return ONLY the text."
+        )
+
+        try:
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=60,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.content[0].text.strip()
+        except Exception as e:
+            print(f"Silence nudge error: {e}")
             return None

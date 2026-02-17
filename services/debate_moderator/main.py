@@ -128,6 +128,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             "last_intervention_time": 0,
             "current_phase": "opening_a",
             "phase_started_at": time.time(),
+            "last_speech_time": time.time(),
+            "silence_nudge_sent": False,
+            "silence_task": None,
         }
 
         async def handle_stt_result(speaker: str, text: str, is_final: bool):
@@ -152,14 +155,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     "timestamp": time.time(),
                     "phase": s["current_phase"],
                 })
+                s["last_speech_time"] = time.time()
 
                 now = time.time()
-                if (
-                    "crossexam" in s["current_phase"]
-                    and now - s["last_intervention_time"] >= 30
-                ):
+                phase = s["current_phase"]
+                # Phase-aware cooldowns: 45s for opening/closing, 30s for crossexam/rebuttal
+                cooldown = 45 if ("opening" in phase or "closing" in phase) else 30
+                if now - s["last_intervention_time"] >= cooldown:
                     intervention = await s["moderator"].evaluate_utterance(
-                        text, speaker, s["current_phase"], s["transcript"][-10:]
+                        text, speaker, phase, s["transcript"][-10:]
                     )
                     if intervention and intervention.get("should_intervene"):
                         s["last_intervention_time"] = now
@@ -174,6 +178,34 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     save_transcript(session_id, s["transcript"])
 
         stt.on_result = handle_stt_result
+
+        async def silence_monitor():
+            """Check for silence every 5s; nudge if >15s silence during active phase."""
+            while session_id in sessions:
+                await asyncio.sleep(5)
+                s = sessions.get(session_id)
+                if not s:
+                    break
+                phase = s["current_phase"]
+                if phase in ("waiting", "consent", "completed"):
+                    continue
+                if s["silence_nudge_sent"]:
+                    continue
+                elapsed = time.time() - s["last_speech_time"]
+                if elapsed >= 15:
+                    # Determine who should be speaking
+                    speaker = "A" if phase.endswith("_a") else "B"
+                    nudge = await s["moderator"].generate_silence_nudge(phase, speaker)
+                    if nudge:
+                        s["silence_nudge_sent"] = True
+                        await broadcast(session_id, {
+                            "type": "intervention",
+                            "intervention_type": "nudge",
+                            "target_student": speaker,
+                            "message": nudge,
+                        })
+
+        sessions[session_id]["silence_task"] = asyncio.create_task(silence_monitor())
 
     session = sessions[session_id]
     session["connections"].add(websocket)
@@ -194,8 +226,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 await session["stt"].send_audio(data["audio"], data.get("speaker", "Unknown"))
 
             elif data["type"] == "phase_command":
-                session["current_phase"] = data.get("phase", session["current_phase"])
+                new_phase = data.get("phase", session["current_phase"])
+                session["current_phase"] = new_phase
                 session["phase_started_at"] = time.time()
+                session["last_speech_time"] = time.time()
+                session["silence_nudge_sent"] = False
+
+                # Generate AI phase prompt on transition
+                if new_phase not in ("waiting", "consent", "completed"):
+                    phase_text = await session["moderator"].generate_phase_prompt(new_phase)
+                    if phase_text:
+                        await broadcast(session_id, {
+                            "type": "intervention",
+                            "intervention_type": "phase_prompt",
+                            "target_student": "both",
+                            "message": phase_text,
+                        })
 
             elif data["type"] == "phase_advance":
                 # Update server-side phase tracking
@@ -219,6 +265,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         # Clean up session if no more connections
         if not session["connections"]:
             save_transcript(session_id, session["transcript"])
+            if session.get("silence_task"):
+                session["silence_task"].cancel()
             await session["stt"].close()
             del sessions[session_id]
 

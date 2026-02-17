@@ -6,6 +6,19 @@ interface PhaseTimerProps {
   phase: DebatePhase;
   timeRemaining: number;
   isGracePeriod: boolean;
+  nameA?: string;
+  nameB?: string;
+}
+
+function personalizeLabel(label: string, nameA?: string, nameB?: string): string {
+  if (!nameA && !nameB) return label;
+  const firstA = nameA ? nameA.split(" ")[0] : "Student A";
+  const firstB = nameB ? nameB.split(" ")[0] : "Student B";
+  return label
+    .replace("Student A", firstA)
+    .replace("Student B", firstB)
+    .replace("A asks B", `${firstA} asks ${firstB}`)
+    .replace("B asks A", `${firstB} asks ${firstA}`);
 }
 
 function formatTime(seconds: number): string {
@@ -30,13 +43,16 @@ export function PhaseTimer({
   phase,
   timeRemaining,
   isGracePeriod,
+  nameA,
+  nameB,
 }: PhaseTimerProps) {
   const config = PHASE_CONFIG[phase];
   const colorClass = getTimerColor(timeRemaining, config.duration, isGracePeriod);
+  const label = personalizeLabel(config.label, nameA, nameB);
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm font-medium text-gray-600">{config.label}</span>
+      <span className="text-sm font-medium text-gray-600">{label}</span>
       {config.duration > 0 && (
         <span className={`font-mono text-lg font-bold ${colorClass}`}>
           {isGracePeriod && "+"}
