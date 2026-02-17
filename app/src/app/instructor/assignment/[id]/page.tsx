@@ -14,7 +14,8 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AssignmentTabs } from "@/components/instructor/assignment-tabs";
 import { PairingControls } from "@/components/instructor/pairing-controls";
 import { ResetCaseButton } from "@/components/instructor/reset-case-button";
 import { ResetDebateButton } from "@/components/instructor/reset-debate-button";
@@ -103,7 +104,7 @@ export default async function InstructorAssignmentDetail({
         </div>
       </div>
 
-      <Tabs defaultValue="students">
+      <AssignmentTabs>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
@@ -306,14 +307,14 @@ export default async function InstructorAssignmentDetail({
                               );
                             })}
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <ResetDebateButton pairingId={p.id} />
+                          <div className="flex items-center gap-4 shrink-0">
                             <Link
-                              href={`/instructor/student/${p.studentAId}?assignment=${id}`}
-                              className="text-xs text-[#1D4F91] hover:underline"
+                              href={`/instructor/debate/${p.id}`}
+                              className="rounded-md bg-[#1D4F91] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#163d73] transition-colors"
                             >
-                              Details
+                              View Debate
                             </Link>
+                            <ResetDebateButton pairingId={p.id} />
                           </div>
                         </div>
                       </CardContent>
@@ -323,7 +324,7 @@ export default async function InstructorAssignmentDetail({
             </div>
           )}
         </TabsContent>
-      </Tabs>
+      </AssignmentTabs>
     </div>
   );
 }

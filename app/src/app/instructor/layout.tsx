@@ -4,6 +4,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { LayoutDashboard, PlusCircle, Users } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { MobileSidebar } from "@/components/instructor/mobile-sidebar";
+
+const NAV_LINKS = [
+  { href: "/instructor/dashboard", label: "Dashboard", icon: "dashboard" },
+  { href: "/instructor/students", label: "Students", icon: "users" },
+  { href: "/instructor/assignments/new", label: "New Assignment", icon: "plus" },
+] as const;
 
 export default async function InstructorLayout({
   children,
@@ -16,7 +23,8 @@ export default async function InstructorLayout({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="relative w-64 bg-[#0F2B4C] text-white">
+      {/* Desktop sidebar */}
+      <aside className="relative hidden w-64 bg-[#0F2B4C] text-white md:block">
         <Link href="/instructor/dashboard" className="flex h-16 items-center gap-2.5 border-b border-white/10 px-6 hover:bg-white/5 transition-colors">
           <Image src="/icon.svg" alt="" width={28} height={28} className="rounded-md" />
           <span className="text-lg font-semibold">Project 803</span>
@@ -49,7 +57,19 @@ export default async function InstructorLayout({
           <SignOutButton className="mt-1 flex items-center gap-1 text-xs text-white/40 hover:text-white/70 transition-colors" />
         </div>
       </aside>
-      <main className="flex-1 bg-[#F5F7FA] p-8">{children}</main>
+
+      {/* Mobile header + sidebar */}
+      <div className="flex flex-1 flex-col">
+        <header className="flex h-14 items-center justify-between border-b bg-[#0F2B4C] px-4 md:hidden">
+          <Link href="/instructor/dashboard" className="flex items-center gap-2">
+            <Image src="/icon.svg" alt="" width={24} height={24} className="rounded-md" />
+            <span className="text-sm font-semibold text-white">Project 803</span>
+          </Link>
+          <MobileSidebar userName={session.user.name || ""} />
+        </header>
+
+        <main className="flex-1 bg-[#F5F7FA] p-4 md:p-8">{children}</main>
+      </div>
     </div>
   );
 }

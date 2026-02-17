@@ -4,10 +4,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import psycopg2
+
+# Load .env BEFORE importing modules that read env vars at module level
+load_dotenv()
+
 from scorer import score_student
 from summarizer import generate_summary
-
-load_dotenv()
 
 app = FastAPI(title="Evaluator", version="1.0.0")
 

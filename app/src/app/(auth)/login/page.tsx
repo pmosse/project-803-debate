@@ -132,6 +132,28 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
+
+          {/* Quick login for testing */}
+          <div className="mt-6 border-t pt-4">
+            <button
+              onClick={async () => {
+                setLoading(true);
+                const result = await signIn("unified-login", {
+                  email: "smith@columbia.edu",
+                  password: "instructor123",
+                  redirect: false,
+                });
+                setLoading(false);
+                if (!result?.error) {
+                  router.push("/instructor/dashboard");
+                }
+              }}
+              disabled={loading}
+              className="w-full rounded-md border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
+            >
+              Quick Login as Instructor (testing)
+            </button>
+          </div>
         </div>
       </div>
     </div>

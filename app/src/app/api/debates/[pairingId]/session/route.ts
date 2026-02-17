@@ -100,6 +100,14 @@ export async function PATCH(
       .update(pairings)
       .set({ status: "completed" })
       .where(eq(pairings.id, pairingId));
+
+    // Trigger evaluation asynchronously (fire-and-forget)
+    const evaluatorUrl = process.env.EVALUATOR_URL || "http://localhost:8005";
+    fetch(`${evaluatorUrl}/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ debate_session_id: existing.id }),
+    }).catch((err) => console.error("Evaluator trigger failed:", err));
   }
 
   await db

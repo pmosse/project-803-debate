@@ -5,9 +5,20 @@ import type { TranscriptEntry } from "@/lib/hooks/use-debate-store";
 
 interface TranscriptPanelProps {
   transcript: TranscriptEntry[];
+  nameA?: string;
+  nameB?: string;
 }
 
-export function TranscriptPanel({ transcript }: TranscriptPanelProps) {
+function mapSpeaker(speaker: string, nameA?: string, nameB?: string): string {
+  if (!nameA && !nameB) return speaker;
+  const firstA = nameA ? nameA.split(" ")[0] : "Student A";
+  const firstB = nameB ? nameB.split(" ")[0] : "Student B";
+  if (speaker === "Student A") return firstA;
+  if (speaker === "Student B") return firstB;
+  return speaker;
+}
+
+export function TranscriptPanel({ transcript, nameA, nameB }: TranscriptPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,7 +44,7 @@ export function TranscriptPanel({ transcript }: TranscriptPanelProps) {
           {finalEntries.map((entry, i) => (
             <div key={i} className="text-sm">
               <span className="font-medium text-[#1D4F91]">
-                {entry.speaker}:
+                {mapSpeaker(entry.speaker, nameA, nameB)}:
               </span>{" "}
               <span className="text-gray-700">{entry.text}</span>
             </div>
@@ -41,7 +52,7 @@ export function TranscriptPanel({ transcript }: TranscriptPanelProps) {
           {interimEntry && (
             <div className="text-sm opacity-50">
               <span className="font-medium text-[#1D4F91]">
-                {interimEntry.speaker}:
+                {mapSpeaker(interimEntry.speaker, nameA, nameB)}:
               </span>{" "}
               <span className="text-gray-500 italic">{interimEntry.text}</span>
             </div>

@@ -9,10 +9,12 @@ import {
   evaluations,
 } from "@/lib/db/schema";
 import { eq, and, or } from "drizzle-orm";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EvaluationRadar } from "@/components/instructor/evaluation-radar";
+import { ArrowLeft } from "lucide-react";
 
 export default async function InstructorStudentDetail({
   params,
@@ -47,6 +49,7 @@ export default async function InstructorStudentDetail({
   }
 
   let pairing = null;
+  let opponentName = "";
   if (assignmentId) {
     const [p] = await db
       .select()
@@ -59,6 +62,15 @@ export default async function InstructorStudentDetail({
       )
       .limit(1);
     pairing = p;
+
+    // Fetch opponent's name for transcript display
+    if (p) {
+      const opponentId = p.studentAId === id ? p.studentBId : p.studentAId;
+      if (opponentId) {
+        const [opp] = await db.select({ name: users.name }).from(users).where(eq(users.id, opponentId)).limit(1);
+        opponentName = opp?.name || "";
+      }
+    }
   }
 
   let debateSession = null;
@@ -89,6 +101,15 @@ export default async function InstructorStudentDetail({
   return (
     <div>
       <div className="mb-6">
+        {assignmentId && (
+          <Link
+            href={`/instructor/assignment/${assignmentId}`}
+            className="mb-3 inline-flex items-center gap-1 text-sm text-[#1D4F91] hover:underline"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to assignment
+          </Link>
+        )}
         <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
         <p className="text-sm text-gray-500">{student.email || "No email"}</p>
       </div>
@@ -261,17 +282,29 @@ export default async function InstructorStudentDetail({
                     timestamp: number;
                     phase: string;
                   }[]
-                ).map((entry, i) => (
-                  <div key={i} className="text-sm">
-                    <span className="font-medium text-[#1D4F91]">
-                      {entry.speaker}:
-                    </span>{" "}
-                    <span className="text-gray-700">{entry.text}</span>
-                    <span className="ml-2 text-xs text-gray-400">
-                      [{entry.phase}]
-                    </span>
-                  </div>
-                ))}
+                ).map((entry, i) => {
+                  const isStudentA = pairing?.studentAId === id;
+                  const speakerName =
+                    entry.speaker === "Student A"
+                      ? (isStudentA ? student.name : opponentName) || "Student A"
+                      : entry.speaker === "Student B"
+                        ? (isStudentA ? opponentName : student.name) || "Student B"
+                        : entry.speaker;
+                  const phasePretty = entry.phase
+                    ?.replace(/_[ab]$/, "")
+                    .replace("crossexam", "cross-exam");
+                  return (
+                    <div key={i} className="text-sm">
+                      <span className="font-medium text-[#1D4F91]">
+                        {speakerName}:
+                      </span>{" "}
+                      <span className="text-gray-700">{entry.text}</span>
+                      <span className="ml-2 text-xs text-gray-400">
+                        [{phasePretty}]
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
