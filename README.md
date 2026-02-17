@@ -7,23 +7,21 @@ Students upload position memos on assigned readings, get paired with an opponent
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Next.js App (port 3000)               │
-│  App Router · NextAuth · Drizzle ORM · Tailwind          │
-├─────────────────────────────────────────────────────────┤
-│                     Python Services                      │
-│                                                          │
-│  memo_processor (8001)    reading_indexer (8002)          │
-│  pymupdf4llm + Claude     sentence-transformers + pgvector│
-│                                                          │
-│  pairing_engine (8003)    debate_moderator (8004)         │
-│  greedy matching           WebSocket + Deepgram + Claude  │
-│                                                          │
-│  evaluator (8005)                                        │
-│  Claude Sonnet scoring                                   │
-├─────────────────────────────────────────────────────────┤
-│  PostgreSQL (pgvector) · Redis · MinIO                   │
-└─────────────────────────────────────────────────────────┘
+Next.js App (port 3000)
+  App Router · NextAuth · Drizzle ORM · Tailwind
+  ─────────────────────────────────────────────────
+Python Services
+  memo_processor (8001)     reading_indexer (8002)
+  pymupdf4llm + Claude      MiniLM + pgvector
+
+  pairing_engine (8003)     debate_moderator (8004)
+  greedy matching            Deepgram + Claude (WS)
+
+  evaluator (8005)
+  Claude Sonnet scoring
+  ─────────────────────────────────────────────────
+Infrastructure
+  PostgreSQL 17 (pgvector) · Redis · MinIO
 ```
 
 ### Tech Stack
