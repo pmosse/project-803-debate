@@ -233,7 +233,7 @@ function DailyCallInner({
         <div className={`absolute bottom-2 left-2 rounded px-2 py-1 text-xs text-white ${
           isMySpeakingTurn ? "bg-yellow-500/80" : "bg-black/50"
         }`}>
-          {isMySpeakingTurn ? `${myFirstName} (speaking)` : `You (${myFirstName})`}
+          {isMySpeakingTurn ? `You · ${myFirstName} (speaking)` : `You · ${myFirstName}`}
         </div>
       </div>
 

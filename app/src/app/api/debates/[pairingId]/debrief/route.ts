@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { debateSessions, pairings, memos } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { debateSessions, pairings, memos, users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic();
@@ -58,15 +58,17 @@ export async function GET(
     .join("\n");
 
   const studentLabel = isStudentA ? "A" : "B";
+  const studentName = session.user.name || `Student ${studentLabel}`;
+  const firstName = studentName.split(" ")[0];
 
   try {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 300,
+      max_tokens: 400,
       messages: [
         {
           role: "user",
-          content: `You are an AI debate coach. A university debate just finished. Generate a personalized debrief for Student ${studentLabel}.
+          content: `You are an AI debate coach. A university debate just finished. Generate a personalized debrief for ${studentName} (Student ${studentLabel} in the transcript).
 
 STUDENT A THESIS: ${memoA?.analysis?.thesis || "Unknown"}
 STUDENT B THESIS: ${memoB?.analysis?.thesis || "Unknown"}
@@ -74,11 +76,11 @@ STUDENT B THESIS: ${memoB?.analysis?.thesis || "Unknown"}
 DEBATE TRANSCRIPT:
 ${transcriptText.slice(-3000)}
 
-Write 2-3 sentences for Student ${studentLabel}:
-1. What they did well (be specific, reference something from the transcript)
-2. One concrete thing they could improve next time
+Write a short debrief for ${firstName}. Two paragraphs:
+1. "What you did well:" — be specific, reference something from the transcript
+2. "One thing to improve:" — one concrete, actionable suggestion for next time
 
-Be encouraging but honest. Address them directly as "you". Do NOT use markdown.`,
+Address them as "you". Use their name ${firstName} naturally. Write in plain text only — no markdown, no headers, no bullet points, no bold/italic formatting.`,
         },
       ],
     });

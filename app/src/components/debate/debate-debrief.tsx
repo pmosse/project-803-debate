@@ -64,7 +64,11 @@ export function DebateDebrief({ pairingId }: DebateDebriefProps) {
           )}
 
           {debrief && (
-            <p className="text-sm leading-relaxed text-gray-700">{debrief}</p>
+            <div className="space-y-3 text-sm leading-relaxed text-gray-700">
+              {debrief.split(/\n\n+/).map((paragraph, i) => (
+                <p key={i}>{paragraph}</p>
+              ))}
+            </div>
           )}
         </div>
       </div>
