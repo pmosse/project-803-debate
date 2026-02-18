@@ -4,7 +4,7 @@ import { useEffect, useCallback, useRef, useState } from "react";
 import { useDebateStore, PHASE_CONFIG } from "@/lib/hooks/use-debate-store";
 import { PhaseTimer } from "./phase-timer";
 import { TranscriptPanel } from "./transcript-panel";
-import { AiModeratorBar } from "./ai-moderator-bar";
+import { AiCoachPanel } from "./ai-coach-panel";
 import { ConsentModal } from "./consent-modal";
 import { PhaseOverlay } from "./phase-overlay";
 import { DebateDebrief } from "./debate-debrief";
@@ -96,7 +96,12 @@ function PhaseTimeline({
           const isMine =
             (p.suffix === "a" && studentRole === "A") ||
             (p.suffix === "b" && studentRole === "B");
-          const speakerLabel = isMine ? myFirst : theirFirst;
+          const isAskingSuffix = p.group === "Cross-Exam";
+          const askerName = isMine ? myFirst : theirFirst;
+          const responderName = isMine ? theirFirst : myFirst;
+          const speakerLabel = isAskingSuffix
+            ? `${askerName} to ${responderName}`
+            : (isMine ? myFirst : theirFirst);
 
           return (
             <div key={p.key} className="flex flex-1 flex-col items-center">
@@ -137,94 +142,6 @@ function PhaseTimeline({
           );
         })}
       </div>
-    </div>
-  );
-}
-
-function getPhaseInstructions(
-  phase: string,
-  opponentThesis?: string,
-  opponentClaims?: string[]
-): { you: string; opponent: string } | null {
-  const claimsList = opponentClaims?.length
-    ? opponentClaims.slice(0, 2).join("; ")
-    : null;
-
-  const instructions: Record<string, { you: string; opponent: string }> = {
-    opening_a: {
-      you: opponentThesis
-        ? `Present your thesis and key arguments. Your opponent argues: "${opponentThesis}"`
-        : "Present your thesis and key arguments. Reference the assigned readings to support your position.",
-      opponent: "Listen carefully. Note claims you want to challenge during cross-examination.",
-    },
-    opening_b: {
-      you: opponentThesis
-        ? `Present your thesis and key arguments. Your opponent argues: "${opponentThesis}"`
-        : "Present your thesis and key arguments. Reference the assigned readings to support your position.",
-      opponent: "Listen carefully. Note claims you want to challenge during cross-examination.",
-    },
-    rebuttal_a: {
-      you: claimsList
-        ? `Address their strongest points: ${claimsList}. Explain why your position still holds.`
-        : "Address your opponent's strongest points. Explain why your position still holds.",
-      opponent: "Listen for any mischaracterizations of your argument.",
-    },
-    rebuttal_b: {
-      you: claimsList
-        ? `Address their strongest points: ${claimsList}. Explain why your position still holds.`
-        : "Address your opponent's strongest points. Explain why your position still holds.",
-      opponent: "Listen for any mischaracterizations of your argument.",
-    },
-    closing_a: {
-      you: opponentThesis
-        ? `Summarize why your position holds despite your opponent's argument that "${opponentThesis}".`
-        : "Summarize your key arguments and why your position is stronger overall.",
-      opponent: "Prepare your own closing statement.",
-    },
-    closing_b: {
-      you: opponentThesis
-        ? `Summarize why your position holds despite your opponent's argument that "${opponentThesis}".`
-        : "Summarize your key arguments and why your position is stronger overall.",
-      opponent: "The debate is almost over.",
-    },
-  };
-
-  return instructions[phase] || null;
-}
-
-function PhaseInstructions({
-  phase,
-  studentRole,
-  studentName,
-  opponentName,
-  opponentThesis,
-  opponentClaims,
-}: {
-  phase: DebatePhase;
-  studentRole: "A" | "B";
-  studentName: string;
-  opponentName: string;
-  opponentThesis?: string;
-  opponentClaims?: string[];
-}) {
-  const instructions = getPhaseInstructions(phase, opponentThesis, opponentClaims);
-  if (!instructions) return null;
-
-  const isMyTurn =
-    (phase.endsWith("_a") && studentRole === "A") ||
-    (phase.endsWith("_b") && studentRole === "B");
-
-  const myFirst = studentName.split(" ")[0];
-  const theirFirst = opponentName.split(" ")[0];
-
-  return (
-    <div className="border-t bg-blue-50 px-4 py-3">
-      <p className="text-sm font-medium text-blue-900">
-        {isMyTurn ? `${myFirst}, your turn` : `It's ${theirFirst}'s turn`}
-      </p>
-      <p className="mt-1 text-sm text-blue-700">
-        {isMyTurn ? instructions.you : instructions.opponent}
-      </p>
     </div>
   );
 }
@@ -522,18 +439,16 @@ export function DebateSession({
         </div>
       )}
 
-      {/* AI moderator bar — visible in all active phases */}
-      {isActiveDebate && <AiModeratorBar interventions={store.interventions} />}
-
-      {/* Phase instructions (non-crossexam phases) */}
-      {isActiveDebate && !store.phase.startsWith("crossexam") && (
-        <PhaseInstructions
+      {/* AI Coach panel — phase context + stacking AI messages */}
+      {isActiveDebate && (
+        <AiCoachPanel
           phase={store.phase}
           studentRole={studentRole}
           studentName={studentName}
           opponentName={opponentName}
           opponentThesis={opponentThesis}
           opponentClaims={opponentClaims}
+          interventions={store.interventions}
         />
       )}
 

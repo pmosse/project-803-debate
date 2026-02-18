@@ -46,6 +46,15 @@ def get_session_context(session_id: str) -> dict:
         cur.execute("SELECT title, prompt_text FROM assignments WHERE id = %s", (assignment_id,))
         assignment = cur.fetchone()
 
+        # Get student names
+        cur.execute(
+            "SELECT id, name FROM users WHERE id IN (%s, %s)",
+            (student_a_id, student_b_id),
+        )
+        names = {}
+        for uid, uname in cur.fetchall():
+            names[uid] = uname
+
         # Get memos for both students
         cur.execute(
             "SELECT student_id, analysis FROM memos WHERE assignment_id = %s AND student_id IN (%s, %s)",
@@ -62,6 +71,8 @@ def get_session_context(session_id: str) -> dict:
             "assignment_id": assignment_id,
             "student_a_thesis": memos.get(student_a_id, {}).get("thesis", ""),
             "student_b_thesis": memos.get(student_b_id, {}).get("thesis", ""),
+            "student_a_name": names.get(student_a_id, "Student A"),
+            "student_b_name": names.get(student_b_id, "Student B"),
         }
     finally:
         cur.close()
@@ -116,6 +127,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             assignment_title=context["assignment_title"],
             student_a_thesis=context["student_a_thesis"],
             student_b_thesis=context["student_b_thesis"],
+            student_a_name=context.get("student_a_name", "Student A"),
+            student_b_name=context.get("student_b_name", "Student B"),
             assignment_id=context["assignment_id"],
             reading_indexer_url=READING_INDEXER_URL,
         )

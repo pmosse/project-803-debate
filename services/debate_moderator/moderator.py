@@ -8,8 +8,8 @@ client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 MODERATION_PROMPT = """You are an AI debate moderator for a university oral defense.
 
 ASSIGNMENT: {assignment_title}
-STUDENT A MEMO POSITION: {student_a_thesis}
-STUDENT B MEMO POSITION: {student_b_thesis}
+{student_a_label}'S POSITION: {student_a_thesis}
+{student_b_label}'S POSITION: {student_b_thesis}
 CURRENT PHASE: {phase}
 RECENT TRANSCRIPT:
 {recent_transcript}
@@ -24,6 +24,7 @@ General rules:
 - Keep interventions brief (1-2 sentences max)
 - Only intervene when genuinely necessary — let the students drive the conversation
 - If a student misquotes or contradicts a reading, use "fact_check" and include the actual passage
+- Use students' first names ({student_a_label} and {student_b_label}), not "Student A" or "Student B"
 
 Output JSON:
 {{
@@ -45,15 +46,17 @@ PHASE_BEHAVIOR = {
 PHASE_PROMPT_TEMPLATE = """You are an AI debate moderator. Generate a single brief contextual instruction (1 sentence, max 20 words) for the start of this debate phase.
 
 PHASE: {phase}
-STUDENT A THESIS: {student_a_thesis}
-STUDENT B THESIS: {student_b_thesis}
+{student_a_label} THESIS: {student_a_thesis}
+{student_b_label} THESIS: {student_b_thesis}
 
 Phase guidance:
 - opening_a/opening_b: Tell the speaker to present their thesis. Mention what the opponent argues.
-- crossexam_a: Student A questions Student B. Hint at a weak point in B's argument.
-- crossexam_b: Student B questions Student A. Hint at a weak point in A's argument.
+- crossexam_a: {student_a_label} questions {student_b_label}. Hint at a weak point in {student_b_label}'s argument.
+- crossexam_b: {student_b_label} questions {student_a_label}. Hint at a weak point in {student_a_label}'s argument.
 - rebuttal_a/rebuttal_b: Tell the speaker to address their opponent's strongest claims.
 - closing_a/closing_b: Tell the speaker to summarize why their position holds.
+
+Use the students' first names, not "Student A" or "Student B".
 
 Return ONLY the instruction text, no JSON, no quotes."""
 
@@ -66,10 +69,14 @@ class Moderator:
         student_b_thesis: str,
         assignment_id: str,
         reading_indexer_url: str,
+        student_a_name: str = "Student A",
+        student_b_name: str = "Student B",
     ):
         self.assignment_title = assignment_title
         self.student_a_thesis = student_a_thesis
         self.student_b_thesis = student_b_thesis
+        self.student_a_name = student_a_name
+        self.student_b_name = student_b_name
         self.assignment_id = assignment_id
         self.reading_indexer_url = reading_indexer_url
         self.http_client = httpx.AsyncClient()
@@ -117,10 +124,14 @@ class Moderator:
             f"{t['speaker']}: {t['text']}" for t in recent_transcript
         )
 
+        first_a = self.student_a_name.split(" ")[0]
+        first_b = self.student_b_name.split(" ")[0]
         prompt = MODERATION_PROMPT.format(
             assignment_title=self.assignment_title,
             student_a_thesis=self.student_a_thesis,
             student_b_thesis=self.student_b_thesis,
+            student_a_label=first_a,
+            student_b_label=first_b,
             phase=phase,
             recent_transcript=transcript_text,
             reading_context=reading_context,
@@ -146,10 +157,14 @@ class Moderator:
 
     async def generate_phase_prompt(self, phase: str) -> str | None:
         """Generate a contextual nudge for a phase transition."""
+        first_a = self.student_a_name.split(" ")[0]
+        first_b = self.student_b_name.split(" ")[0]
         prompt = PHASE_PROMPT_TEMPLATE.format(
             phase=phase,
             student_a_thesis=self.student_a_thesis,
             student_b_thesis=self.student_b_thesis,
+            student_a_label=first_a,
+            student_b_label=first_b,
         )
 
         try:
@@ -165,12 +180,17 @@ class Moderator:
 
     async def generate_silence_nudge(self, phase: str, speaker: str) -> str | None:
         """Generate a nudge for a silent speaker."""
-        thesis = self.student_a_thesis if speaker == "A" else self.student_b_thesis
+        if speaker == "A":
+            name = self.student_a_name.split(" ")[0]
+            thesis = self.student_a_thesis
+        else:
+            name = self.student_b_name.split(" ")[0]
+            thesis = self.student_b_thesis
         prompt = (
-            f"A student (Student {speaker}) has been silent for 15+ seconds during the {phase} phase. "
+            f"{name} has been silent for 15+ seconds during the {phase} phase. "
             f"Their thesis is: {thesis}. "
             f"Generate a single brief, encouraging prompt (1 sentence, max 15 words) to re-engage them. "
-            f"Reference their own argument to prompt a response. Return ONLY the text."
+            f"Use their first name ({name}). Reference their own argument to prompt a response. Return ONLY the text."
         )
 
         try:

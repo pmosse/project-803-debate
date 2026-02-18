@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
         studentAId: pair.student_a_id,
         studentBId: pair.student_b_id,
         debateRoomUrl: room.url,
-        debateRoomId: room.id,
+        debateRoomId: roomName,
         matchmakingReason: reason,
         status: "paired",
       })
