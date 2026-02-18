@@ -49,6 +49,10 @@ async function seed() {
     { name: "James Kim", email: "jk3108@columbia.edu" },
     { name: "Katherine Patel", email: "kp2815@columbia.edu" },
     { name: "Lucas Andersen", email: "la2790@columbia.edu" },
+    { name: "Fernando Fabre", email: "ff2024@columbia.edu" },
+    { name: "Patricio Mosse", email: "pm2025@columbia.edu" },
+    { name: "Michel Mosse", email: "mm2026@columbia.edu" },
+    { name: "Sarah Holloway", email: "sh2027@columbia.edu" },
   ];
 
   const students: { id: string; name: string }[] = [];
@@ -261,11 +265,13 @@ Assignment: One page response to the question: Should Walmart get the Nobel in E
     console.log(`  Memo: ${student.name} — ${status}`);
   }
 
-  // Students 11-12 (Katherine, Lucas) have no memo yet
-  console.log(`  ${students[11].name} — no memo`);
-  console.log(`  ${students[12].name} — no memo`);
+  // Students 11-16 have no memo yet
+  for (let i = 11; i < students.length; i++) {
+    console.log(`  ${students[i].name} — no memo`);
+  }
 
-  console.log(`\nSeeded ${memoData.length} memos (${memoData.filter((m) => m.thesis).length} analyzed, 1 processing, 2 students haven't uploaded yet).`);
+  const noMemoCount = students.length - memoData.length;
+  console.log(`\nSeeded ${memoData.length} memos (${memoData.filter((m) => m.thesis).length} analyzed, 1 processing, ${noMemoCount} students haven't uploaded yet).`);
 
   console.log("\n--- Login Credentials ---");
   console.log("Instructor: smith@columbia.edu / instructor123");
