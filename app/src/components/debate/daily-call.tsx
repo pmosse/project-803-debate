@@ -9,7 +9,7 @@ import {
   DailyVideo,
   DailyAudio,
 } from "@daily-co/daily-react";
-import { Video, AlertTriangle } from "lucide-react";
+import { Video, AlertTriangle, RefreshCw } from "lucide-react";
 
 interface TranscriptEvent {
   speaker: string;
@@ -81,7 +81,26 @@ function DailyCallInner({
   const localSessionId = useLocalSessionId();
   const remoteIds = useParticipantIds({ filter: "remote" });
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const remoteJoinedFired = useRef(false);
+
+  function startTranscription() {
+    if (!daily) return;
+    setTranscriptionError(null);
+    try {
+      daily.startTranscription({
+        language: "multi",
+        model: "nova-2-general",
+        profanity_filter: false,
+        endpointing: 700,
+        punctuate: true,
+        extra: { interim_results: true, smart_format: true },
+      });
+    } catch (err) {
+      console.error("Transcription start failed:", err);
+      setTranscriptionError("Live transcription failed to start. AI coaching won't work until fixed.");
+    }
+  }
 
   // Join on mount, start transcription, leave on unmount
   useEffect(() => {
@@ -94,15 +113,7 @@ function DailyCallInner({
       .then(() => {
         if (cancelled) return;
         setJoinError(null);
-        // Start Daily.co built-in transcription (powered by Deepgram server-side)
-        daily.startTranscription({
-          language: "multi",
-          model: "nova-2-general",
-          profanity_filter: false,
-          endpointing: 700,
-          punctuate: true,
-          extra: { interim_results: true, smart_format: true },
-        });
+        startTranscription();
       })
       .catch((err: Error) => {
         if (!cancelled) {
@@ -118,6 +129,26 @@ function DailyCallInner({
     return () => {
       cancelled = true;
       daily.leave();
+    };
+  }, [daily]);
+
+  // Listen for transcription errors from Daily.co
+  useEffect(() => {
+    if (!daily) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleTranscriptionError = (e: any) => {
+      console.error("Transcription error:", e);
+      setTranscriptionError(
+        e?.errorMsg || "Live transcription encountered an error. AI coaching may not work."
+      );
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (daily as any).on("transcription-error", handleTranscriptionError);
+    return () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (daily as any).off("transcription-error", handleTranscriptionError);
     };
   }, [daily]);
 
@@ -212,7 +243,21 @@ function DailyCallInner({
   }
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-hidden bg-gray-900 p-2">
+    <div className="relative grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-hidden bg-gray-900 p-2">
+      {/* Transcription error banner */}
+      {transcriptionError && (
+        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-amber-500/90 px-3 py-2 text-sm text-white backdrop-blur-sm">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="flex-1">{transcriptionError}</span>
+          <button
+            onClick={() => startTranscription()}
+            className="flex shrink-0 items-center gap-1 rounded bg-white/20 px-2.5 py-1 text-xs font-medium hover:bg-white/30"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Retry
+          </button>
+        </div>
+      )}
       {/* Local video */}
       <div className={`relative overflow-hidden rounded-lg bg-gray-800 transition-all ${
         isMySpeakingTurn ? "ring-2 ring-yellow-400 ring-offset-1 ring-offset-gray-900" : ""
