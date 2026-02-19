@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DailyProvider,
   useDaily,
@@ -83,6 +83,7 @@ function DailyCallInner({
   const [joinError, setJoinError] = useState<string | null>(null);
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const remoteJoinedFired = useRef(false);
+  const interimTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   function startTranscription() {
     if (!daily) return;
@@ -171,43 +172,71 @@ function DailyCallInner({
     daily.setLocalVideo(camEnabled);
   }, [daily, camEnabled]);
 
-  // Listen for Daily.co built-in transcription events
-  useEffect(() => {
-    if (!daily || !localSessionId) return;
-
-    const handleTranscriptionMessage = (e: {
-      participantId: string;
-      text: string;
-      rawResponse: Record<string, unknown>;
-    }) => {
-      const text = e.text;
-      if (!text?.trim()) return;
-
-      const is_final = (e.rawResponse?.is_final as boolean) ?? false;
-      const isMe = e.participantId === localSessionId;
-      const speaker = isMe
-        ? (studentRole === "A" ? "Student A" : "Student B")
-        : (studentRole === "A" ? "Student B" : "Student A");
-
-      // Forward own speech to backend (avoids duplicates since both clients hear both)
+  // Promote a speaker's interim text to final after a silence gap
+  const promoteToFinal = useCallback(
+    (speaker: string, text: string, isMe: boolean) => {
       if (isMe && wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: "transcript_text",
           speaker,
           text,
-          is_final,
+          is_final: true,
+        }));
+      }
+      onTranscript?.({ speaker, text, is_final: true });
+    },
+    [wsRef, onTranscript]
+  );
+
+  // Listen for Daily.co built-in transcription events
+  // Daily.co events lack rawResponse, so we use a 1.5s silence timeout
+  // to promote interim text to final for each speaker.
+  useEffect(() => {
+    if (!daily || !localSessionId) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleTranscriptionMessage = (e: any) => {
+      const text = e.text;
+      if (!text?.trim()) return;
+
+      const isMe = e.participantId === localSessionId;
+      const speaker = isMe
+        ? (studentRole === "A" ? "Student A" : "Student B")
+        : (studentRole === "A" ? "Student B" : "Student A");
+
+      // Clear pending timer for this speaker
+      if (interimTimersRef.current[speaker]) {
+        clearTimeout(interimTimersRef.current[speaker]);
+      }
+
+      // Forward interim to backend
+      if (isMe && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: "transcript_text",
+          speaker,
+          text,
+          is_final: false,
         }));
       }
 
-      // Update local UI
-      onTranscript?.({ speaker, text, is_final });
+      // Update local UI with interim
+      onTranscript?.({ speaker, text, is_final: false });
+
+      // After 1.5s of silence, promote to final
+      interimTimersRef.current[speaker] = setTimeout(
+        () => promoteToFinal(speaker, text, isMe),
+        1500
+      );
     };
 
     daily.on("transcription-message", handleTranscriptionMessage);
     return () => {
       daily.off("transcription-message", handleTranscriptionMessage);
+      // Clear all pending timers on cleanup
+      Object.values(interimTimersRef.current).forEach(clearTimeout);
+      interimTimersRef.current = {};
     };
-  }, [daily, localSessionId, studentRole, wsRef, onTranscript]);
+  }, [daily, localSessionId, studentRole, wsRef, onTranscript, promoteToFinal]);
 
   const remoteId = remoteIds[0] ?? null;
 
