@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { LayoutDashboard, PlusCircle, Users } from "lucide-react";
+import { LayoutDashboard, Mic, PlusCircle, Users } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { MobileSidebar } from "@/components/instructor/mobile-sidebar";
 
@@ -50,6 +50,13 @@ export default async function InstructorLayout({
           >
             <PlusCircle className="h-4 w-4" />
             New Assignment
+          </Link>
+          <Link
+            href="/instructor/av-test"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <Mic className="h-4 w-4" />
+            A/V Test
           </Link>
         </nav>
         <div className="absolute bottom-4 left-4 right-4">
