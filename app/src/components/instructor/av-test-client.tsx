@@ -8,8 +8,6 @@ import {
   DailyVideo,
 } from "@daily-co/daily-react";
 import { Mic, MicOff, Camera, CameraOff, Phone, PhoneOff } from "lucide-react";
-import { TranscriptPanel } from "@/components/debate/transcript-panel";
-import type { TranscriptEntry } from "@/lib/hooks/use-debate-store";
 
 interface RoomInfo {
   roomUrl: string;
@@ -72,6 +70,12 @@ export function AvTestClient() {
   );
 }
 
+interface TranscriptLine {
+  speaker: string;
+  text: string;
+  isFinal: boolean;
+}
+
 function AvTestInner({
   roomName,
   onEnd,
@@ -83,18 +87,27 @@ function AvTestInner({
   const localSessionId = useLocalSessionId();
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
-  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [finals, setFinals] = useState<TranscriptLine[]>([]);
+  const [interim, setInterim] = useState<TranscriptLine | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [summaryCountdown, setSummaryCountdown] = useState(30);
+  const [countdown, setCountdown] = useState(30);
   const [summarizing, setSummarizing] = useState(false);
-  const lastSummarizedRef = useRef(-1);
-  const transcriptRef = useRef<TranscriptEntry[]>([]);
+  const finalsRef = useRef<TranscriptLine[]>([]);
+  const lastSummarizedCountRef = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Keep ref in sync
   useEffect(() => {
-    transcriptRef.current = transcript;
-  }, [transcript]);
+    finalsRef.current = finals;
+  }, [finals]);
+
+  // Auto-scroll transcript
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [finals, interim]);
 
   // Join + start transcription
   useEffect(() => {
@@ -131,23 +144,14 @@ function AvTestInner({
       if (!text?.trim()) return;
 
       const isFinal = (e.rawResponse?.is_final as boolean) ?? false;
+      const line: TranscriptLine = { speaker: "You", text, isFinal };
 
-      setTranscript((prev) => {
-        if (isFinal) {
-          // Replace any interim entry, add final
-          const withoutInterim = prev.filter((t) => t.isFinal);
-          return [
-            ...withoutInterim,
-            { speaker: "You", text, timestamp: Date.now(), phase: "test", isFinal: true },
-          ];
-        }
-        // Update interim
-        const finals = prev.filter((t) => t.isFinal);
-        return [
-          ...finals,
-          { speaker: "You", text, timestamp: Date.now(), phase: "test", isFinal: false },
-        ];
-      });
+      if (isFinal) {
+        setFinals((prev) => [...prev, line]);
+        setInterim(null);
+      } else {
+        setInterim(line);
+      }
     },
     []
   );
@@ -169,50 +173,46 @@ function AvTestInner({
     daily?.setLocalVideo(camOn);
   }, [daily, camOn]);
 
-  // Countdown timer (ticks every second)
+  // Single interval: countdown + trigger summary
   useEffect(() => {
-    const tick = setInterval(() => {
-      setSummaryCountdown((prev) => (prev <= 1 ? 30 : prev - 1));
+    const tick = setInterval(async () => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          // Fire summary
+          const entries = finalsRef.current;
+          if (entries.length > 0 && entries.length !== lastSummarizedCountRef.current) {
+            lastSummarizedCountRef.current = entries.length;
+            const text = entries.map((e) => `${e.speaker}: ${e.text}`).join("\n");
+
+            setSummarizing(true);
+            setSummaryError(null);
+            fetch("/api/instructor/test-room/summarize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ transcript: text }),
+            })
+              .then(async (res) => {
+                if (!res.ok) {
+                  const body = await res.text();
+                  throw new Error(`${res.status}: ${body}`);
+                }
+                return res.json();
+              })
+              .then((data) => setSummary(data.summary))
+              .catch((err) => {
+                console.error("Summary failed:", err);
+                setSummaryError(err.message || "Failed to generate summary");
+              })
+              .finally(() => setSummarizing(false));
+          }
+          return 30;
+        }
+        return prev - 1;
+      });
     }, 1_000);
+
     return () => clearInterval(tick);
   }, []);
-
-  // AI summary when countdown hits 0
-  useEffect(() => {
-    if (summaryCountdown !== 30) return; // only fire on reset
-    // Skip the very first mount
-    if (lastSummarizedRef.current === -1) {
-      lastSummarizedRef.current = 0;
-      return;
-    }
-
-    const entries = transcriptRef.current.filter((t) => t.isFinal);
-    if (entries.length === 0 || entries.length === lastSummarizedRef.current) return;
-
-    lastSummarizedRef.current = entries.length;
-    const text = entries.map((e) => `${e.speaker}: ${e.text}`).join("\n");
-
-    setSummarizing(true);
-    setSummaryError(null);
-    fetch("/api/instructor/test-room/summarize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcript: text }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.text();
-          throw new Error(`${res.status}: ${body}`);
-        }
-        return res.json();
-      })
-      .then((data) => setSummary(data.summary))
-      .catch((err) => {
-        console.error("Summary failed:", err);
-        setSummaryError(err.message || "Failed to generate summary");
-      })
-      .finally(() => setSummarizing(false));
-  }, [summaryCountdown]);
 
   function handleEnd() {
     daily?.leave();
@@ -280,8 +280,30 @@ function AvTestInner({
           <div className="border-b px-4 py-2">
             <h2 className="text-sm font-semibold text-gray-700">Live Transcript</h2>
           </div>
-          <div className="[&>div]:h-64">
-            <TranscriptPanel transcript={transcript} nameA="You" />
+          <div
+            ref={scrollRef}
+            className="h-64 overflow-y-auto bg-gray-50 px-4 py-2"
+          >
+            {finals.length === 0 && !interim ? (
+              <p className="py-4 text-center text-sm text-gray-400">
+                Live transcript will appear here...
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {finals.map((entry, i) => (
+                  <div key={i} className="text-sm">
+                    <span className="font-medium text-[#1D4F91]">You:</span>{" "}
+                    <span className="text-gray-700">{entry.text}</span>
+                  </div>
+                ))}
+                {interim && (
+                  <div className="text-sm opacity-50">
+                    <span className="font-medium text-[#1D4F91]">You:</span>{" "}
+                    <span className="italic text-gray-500">{interim.text}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -290,7 +312,7 @@ function AvTestInner({
           <div className="flex items-center justify-between border-b px-4 py-2">
             <h2 className="text-sm font-semibold text-gray-700">AI Summary</h2>
             <span className="text-xs tabular-nums text-gray-400">
-              {summarizing ? "Summarizing..." : `Next in ${summaryCountdown}s`}
+              {summarizing ? "Summarizing..." : `Next in ${countdown}s`}
             </span>
           </div>
           <div className="p-4">
