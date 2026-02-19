@@ -85,7 +85,8 @@ function AvTestInner({
 }) {
   const daily = useDaily();
   const localSessionId = useLocalSessionId();
-  const [micOn, setMicOn] = useState(true);
+  const [transcriptionReady, setTranscriptionReady] = useState(false);
+  const [micOn, setMicOn] = useState(false);
   const [camOn, setCamOn] = useState(true);
   const [finals, setFinals] = useState<TranscriptLine[]>([]);
   const [interim, setInterim] = useState<TranscriptLine | null>(null);
@@ -135,6 +136,19 @@ function AvTestInner({
     return () => {
       cancelled = true;
       daily.leave();
+    };
+  }, [daily]);
+
+  // Listen for transcription-started to know when Deepgram is ready
+  useEffect(() => {
+    if (!daily) return;
+    const handleStarted = () => {
+      setTranscriptionReady(true);
+      setMicOn(true);
+    };
+    (daily as any).on("transcription-started", handleStarted);
+    return () => {
+      (daily as any).off("transcription-started", handleStarted);
     };
   }, [daily]);
 
@@ -189,8 +203,10 @@ function AvTestInner({
     daily?.setLocalVideo(camOn);
   }, [daily, camOn]);
 
-  // Single interval: countdown + trigger summary
+  // Single interval: countdown + trigger summary (only runs once transcription is ready)
   useEffect(() => {
+    if (!transcriptionReady) return;
+    setCountdown(30); // reset countdown when transcription becomes ready
     const tick = setInterval(async () => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -228,7 +244,7 @@ function AvTestInner({
     }, 1_000);
 
     return () => clearInterval(tick);
-  }, []);
+  }, [transcriptionReady]);
 
   function handleEnd() {
     daily?.leave();
@@ -256,6 +272,15 @@ function AvTestInner({
           <div className="absolute bottom-2 left-2 rounded bg-black/50 px-2 py-1 text-xs text-white">
             You (Instructor)
           </div>
+          {!transcriptionReady && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/70">
+              <div className="text-center">
+                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                <p className="mt-3 text-sm font-medium text-white">Starting transcription...</p>
+                <p className="mt-1 text-xs text-gray-400">This takes about 15 seconds</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Controls */}
