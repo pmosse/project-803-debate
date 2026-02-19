@@ -96,6 +96,7 @@ function AvTestInner({
   const finalsRef = useRef<TranscriptLine[]>([]);
   const lastSummarizedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const interimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep ref in sync
   useEffect(() => {
@@ -137,23 +138,38 @@ function AvTestInner({
     };
   }, [daily]);
 
+  // Promote current interim to final (called by timeout)
+  const promoteInterim = useCallback(() => {
+    setInterim((cur) => {
+      if (cur) {
+        setFinals((prev) => [...prev, { ...cur, isFinal: true }]);
+      }
+      return null;
+    });
+  }, []);
+
   // Listen for transcription messages
+  // Daily.co events here have no rawResponse, so we use a timeout to
+  // promote interim text to final when speech pauses for 1.5 seconds.
   const handleTranscription = useCallback(
-    (e: { participantId: string; text: string; rawResponse: Record<string, unknown> }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (e: any) => {
       const text = e.text;
       if (!text?.trim()) return;
 
-      const isFinal = (e.rawResponse?.is_final as boolean) ?? false;
-      const line: TranscriptLine = { speaker: "You", text, isFinal };
+      const line: TranscriptLine = { speaker: "You", text, isFinal: false };
 
-      if (isFinal) {
-        setFinals((prev) => [...prev, line]);
-        setInterim(null);
-      } else {
-        setInterim(line);
+      // Clear any pending promotion timer
+      if (interimTimerRef.current) {
+        clearTimeout(interimTimerRef.current);
+        interimTimerRef.current = null;
       }
+
+      setInterim(line);
+      // If no new event in 1.5s, promote this interim to final
+      interimTimerRef.current = setTimeout(promoteInterim, 1500);
     },
-    []
+    [promoteInterim]
   );
 
   useEffect(() => {
