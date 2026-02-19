@@ -85,7 +85,10 @@ function AvTestInner({
   const [camOn, setCamOn] = useState(true);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [summary, setSummary] = useState<string | null>(null);
-  const lastSummarizedRef = useRef(0);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryCountdown, setSummaryCountdown] = useState(30);
+  const [summarizing, setSummarizing] = useState(false);
+  const lastSummarizedRef = useRef(-1);
   const transcriptRef = useRef<TranscriptEntry[]>([]);
 
   // Keep ref in sync
@@ -166,32 +169,50 @@ function AvTestInner({
     daily?.setLocalVideo(camOn);
   }, [daily, camOn]);
 
-  // AI summary every 30 seconds
+  // Countdown timer (ticks every second)
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const entries = transcriptRef.current.filter((t) => t.isFinal);
-      if (entries.length === 0 || entries.length === lastSummarizedRef.current) return;
-
-      lastSummarizedRef.current = entries.length;
-      const text = entries.map((e) => `${e.speaker}: ${e.text}`).join("\n");
-
-      try {
-        const res = await fetch("/api/instructor/test-room/summarize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: text }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setSummary(data.summary);
-        }
-      } catch (err) {
-        console.error("Summary failed:", err);
-      }
-    }, 30_000);
-
-    return () => clearInterval(interval);
+    const tick = setInterval(() => {
+      setSummaryCountdown((prev) => (prev <= 1 ? 30 : prev - 1));
+    }, 1_000);
+    return () => clearInterval(tick);
   }, []);
+
+  // AI summary when countdown hits 0
+  useEffect(() => {
+    if (summaryCountdown !== 30) return; // only fire on reset
+    // Skip the very first mount
+    if (lastSummarizedRef.current === -1) {
+      lastSummarizedRef.current = 0;
+      return;
+    }
+
+    const entries = transcriptRef.current.filter((t) => t.isFinal);
+    if (entries.length === 0 || entries.length === lastSummarizedRef.current) return;
+
+    lastSummarizedRef.current = entries.length;
+    const text = entries.map((e) => `${e.speaker}: ${e.text}`).join("\n");
+
+    setSummarizing(true);
+    setSummaryError(null);
+    fetch("/api/instructor/test-room/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript: text }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(`${res.status}: ${body}`);
+        }
+        return res.json();
+      })
+      .then((data) => setSummary(data.summary))
+      .catch((err) => {
+        console.error("Summary failed:", err);
+        setSummaryError(err.message || "Failed to generate summary");
+      })
+      .finally(() => setSummarizing(false));
+  }, [summaryCountdown]);
 
   function handleEnd() {
     daily?.leave();
@@ -259,22 +280,28 @@ function AvTestInner({
           <div className="border-b px-4 py-2">
             <h2 className="text-sm font-semibold text-gray-700">Live Transcript</h2>
           </div>
-          <div className="h-64">
+          <div className="[&>div]:h-64">
             <TranscriptPanel transcript={transcript} nameA="You" />
           </div>
         </div>
 
         {/* AI Summary */}
         <div className="overflow-hidden rounded-xl border bg-white">
-          <div className="border-b px-4 py-2">
+          <div className="flex items-center justify-between border-b px-4 py-2">
             <h2 className="text-sm font-semibold text-gray-700">AI Summary</h2>
+            <span className="text-xs tabular-nums text-gray-400">
+              {summarizing ? "Summarizing..." : `Next in ${summaryCountdown}s`}
+            </span>
           </div>
           <div className="p-4">
+            {summaryError && (
+              <p className="mb-2 text-sm text-red-500">{summaryError}</p>
+            )}
             {summary ? (
               <div className="whitespace-pre-wrap text-sm text-gray-700">{summary}</div>
             ) : (
               <p className="text-sm text-gray-400">
-                A summary will appear after 30 seconds of speech...
+                Speak for a bit — a summary will appear after the countdown.
               </p>
             )}
           </div>
