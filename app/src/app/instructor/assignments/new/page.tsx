@@ -15,7 +15,7 @@ const schema = z.object({
   title: z.string().min(1, "Title is required"),
   promptText: z.string().min(1, "Prompt is required"),
   rubricText: z.string().optional(),
-  courseCode: z.string().min(1, "Course code is required"),
+  courseCode: z.string().optional(),
   memoDeadline: z.string().optional(),
   debateDeadline: z.string().optional(),
   readingLinks: z
@@ -98,20 +98,6 @@ export default function NewAssignment() {
               />
               {errors.title && (
                 <p className="text-sm text-red-600">{errors.title.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="courseCode">Course Code</Label>
-              <Input
-                id="courseCode"
-                {...register("courseCode")}
-                placeholder="e.g., ECON803"
-              />
-              {errors.courseCode && (
-                <p className="text-sm text-red-600">
-                  {errors.courseCode.message}
-                </p>
               )}
             </div>
 

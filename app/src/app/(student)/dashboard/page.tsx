@@ -23,13 +23,7 @@ export default async function StudentDashboard() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const courseCode = (session.user as any).courseCode;
-  if (!courseCode) redirect("/login");
-
-  const allAssignments = await db
-    .select()
-    .from(assignments)
-    .where(eq(assignments.courseCode, courseCode));
+  const allAssignments = await db.select().from(assignments);
 
   const studentMemos = await db
     .select()

@@ -13,7 +13,7 @@ const createSchema = z.object({
     .optional(),
   memoDeadline: z.string().optional(),
   debateDeadline: z.string().optional(),
-  courseCode: z.string().min(1),
+  courseCode: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       debateDeadline: parsed.data.debateDeadline
         ? new Date(parsed.data.debateDeadline)
         : undefined,
-      courseCode: parsed.data.courseCode,
+      courseCode: parsed.data.courseCode || (session.user as any).courseCode || "DEFAULT",
       createdBy: session.user.id,
     })
     .returning();
