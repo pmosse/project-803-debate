@@ -21,11 +21,14 @@ const schema = z.object({
   readingLinks: z
     .array(
       z.object({
-        title: z.string().min(1, "Title required"),
-        url: z.string().url("Must be a valid URL"),
+        title: z.string(),
+        url: z.string(),
       })
     )
-    .optional(),
+    .optional()
+    .transform((links) =>
+      links?.filter((l) => l.title.trim() || l.url.trim())
+    ),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -43,7 +46,7 @@ export default function NewAssignment() {
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      readingLinks: [{ title: "", url: "" }],
+      readingLinks: [],
     },
   });
 
@@ -168,7 +171,7 @@ export default function NewAssignment() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between text-base">
-              Required Readings
+              Readings (optional)
               <Button
                 type="button"
                 variant="outline"
@@ -181,6 +184,9 @@ export default function NewAssignment() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {fields.length === 0 && (
+              <p className="text-sm text-gray-400">No readings added yet.</p>
+            )}
             {fields.map((field, index) => (
               <div key={field.id} className="flex gap-2">
                 <Input
@@ -193,16 +199,14 @@ export default function NewAssignment() {
                   placeholder="URL"
                   className="flex-1"
                 />
-                {fields.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove(index)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => remove(index)}
+                >
+                  <Trash2 className="h-4 w-4 text-red-500" />
+                </Button>
               </div>
             ))}
           </CardContent>
