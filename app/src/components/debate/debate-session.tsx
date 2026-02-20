@@ -170,6 +170,7 @@ export function DebateSession({
   const store = useDebateStore();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const phaseFromRemoteRef = useRef(false);
   const [micEnabled, setMicEnabled] = useState(true);
   const [camEnabled, setCamEnabled] = useState(true);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -252,6 +253,7 @@ export function DebateSession({
         });
       } else if (data.type === "phase_advance") {
         const phase = data.phase as import("@/lib/hooks/use-debate-store").DebatePhase;
+        phaseFromRemoteRef.current = true;
         if (phase && phase !== store.phase) {
           store.setPhase(phase);
         } else if (!phase) {
@@ -271,7 +273,13 @@ export function DebateSession({
   }, [store.sessionId]);
 
   // Send phase changes over WS so moderator tracks current phase
+  // Skip if the phase change originated from a remote phase_advance message
+  // to avoid duplicate AI phase prompts.
   useEffect(() => {
+    if (phaseFromRemoteRef.current) {
+      phaseFromRemoteRef.current = false;
+      return;
+    }
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     if (store.phase === "waiting" || store.phase === "consent") return;
