@@ -53,8 +53,14 @@ export function MemoUpload({ assignmentId }: MemoUploadProps) {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Upload failed");
+        const text = await response.text();
+        let message = "Upload failed";
+        try {
+          message = JSON.parse(text).error || message;
+        } catch {
+          message = text || message;
+        }
+        throw new Error(message);
       }
 
       router.refresh();
