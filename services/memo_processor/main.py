@@ -1,14 +1,15 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from dotenv import load_dotenv
 from extractor import extract_text
 from analyzer import analyze_memo
 import psycopg2
 import boto3
 import tempfile
-
-load_dotenv()
 
 app = FastAPI(title="Memo Processor", version="1.0.0")
 
@@ -17,8 +18,10 @@ S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://localhost:9000")
 S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "minioadmin")
 S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "minioadmin")
 S3_BUCKET = os.getenv("S3_BUCKET", "debates")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "app", "uploads"))
+USE_FS = "localhost" in S3_ENDPOINT or os.getenv("STORAGE_MODE") == "fs"
 
-s3 = boto3.client(
+s3 = None if USE_FS else boto3.client(
     "s3",
     endpoint_url=S3_ENDPOINT,
     aws_access_key_id=S3_ACCESS_KEY,
@@ -57,10 +60,17 @@ async def process_memo(request: ProcessRequest):
         )
         conn.commit()
 
-        # Download file from S3
-        with tempfile.NamedTemporaryFile(suffix=os.path.splitext(file_path)[1], delete=False) as tmp:
-            s3.download_fileobj(S3_BUCKET, file_path, tmp)
-            tmp_path = tmp.name
+        # Download/locate file
+        if USE_FS:
+            tmp_path = os.path.join(UPLOAD_DIR, file_path)
+            if not os.path.exists(tmp_path):
+                cur.execute("UPDATE memos SET status = 'error' WHERE id = %s", (memo_id,))
+                conn.commit()
+                raise HTTPException(status_code=404, detail=f"File not found: {tmp_path}")
+        else:
+            with tempfile.NamedTemporaryFile(suffix=os.path.splitext(file_path)[1], delete=False) as tmp:
+                s3.download_fileobj(S3_BUCKET, file_path, tmp)
+                tmp_path = tmp.name
 
         # Extract text
         try:
@@ -72,7 +82,8 @@ async def process_memo(request: ProcessRequest):
             conn.commit()
             raise HTTPException(status_code=422, detail=f"Text extraction failed: {str(e)}")
         finally:
-            os.unlink(tmp_path)
+            if not USE_FS:
+                os.unlink(tmp_path)
 
         # Update status and text
         cur.execute(
