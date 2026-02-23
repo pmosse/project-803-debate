@@ -47,14 +47,23 @@ async def evaluate_debate(request: EvaluateRequest):
 
         transcript_data = transcript if isinstance(transcript, list) else json.loads(transcript) if transcript else []
 
-        # Get assignment
+        # Get assignment (including rubric_criteria)
         cur.execute(
-            "SELECT prompt_text, rubric_text FROM assignments WHERE id = %s",
+            "SELECT prompt_text, rubric_text, rubric_criteria FROM assignments WHERE id = %s",
             (assignment_id,),
         )
         assignment = cur.fetchone()
         prompt_text = assignment[0] if assignment else ""
         rubric_text = assignment[1] if assignment else ""
+        rubric_criteria_raw = assignment[2] if assignment else None
+
+        # Parse rubric_criteria from jsonb
+        rubric_criteria = None
+        if rubric_criteria_raw:
+            if isinstance(rubric_criteria_raw, list):
+                rubric_criteria = rubric_criteria_raw
+            elif isinstance(rubric_criteria_raw, str):
+                rubric_criteria = json.loads(rubric_criteria_raw)
 
         results = []
 
@@ -74,10 +83,21 @@ async def evaluate_debate(request: EvaluateRequest):
                 memo_text=memo_text,
                 transcript=transcript_data,
                 student_label=label,
+                rubric_criteria=rubric_criteria,
+                assignment_id=assignment_id,
+                pairing_id=pairing_id,
             )
 
+            # Extract criteria_scores if present
+            criteria_scores = scores.get("criteria_scores")
+
             # Generate summary
-            summary = generate_summary(scores, transcript_data, label)
+            summary = generate_summary(
+                scores, transcript_data, label,
+                criteria_scores=criteria_scores,
+                assignment_id=assignment_id,
+                pairing_id=pairing_id,
+            )
 
             # Store evaluation
             cur.execute(
@@ -85,20 +105,21 @@ async def evaluate_debate(request: EvaluateRequest):
                 (debate_session_id, student_id, score, confidence,
                  evidence_of_reading_score, opening_clarity, rebuttal_quality,
                  reading_accuracy, evidence_use, integrity_flags,
-                 ai_summary, pass_fail)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+                 criteria_scores, ai_summary, pass_fail)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
                 RETURNING id""",
                 (
                     session_id,
                     student_id,
                     scores["overall_score"],
-                    scores["confidence"],
-                    scores["evidence_of_reading"],
-                    scores["opening_clarity"],
-                    scores["rebuttal_quality"],
-                    scores["reading_accuracy"],
-                    scores["evidence_use"],
+                    scores.get("confidence", 0),
+                    scores.get("evidence_of_reading", 0),
+                    scores.get("opening_clarity", 0),
+                    scores.get("rebuttal_quality", 0),
+                    scores.get("reading_accuracy", 0),
+                    scores.get("evidence_use", 0),
                     json.dumps(scores.get("integrity_flags", [])),
+                    json.dumps(criteria_scores) if criteria_scores else None,
                     summary,
                     scores["pass_fail"],
                 ),
@@ -106,7 +127,7 @@ async def evaluate_debate(request: EvaluateRequest):
 
             results.append({
                 "student_id": student_id,
-                "scores": scores,
+                "scores": {k: v for k, v in scores.items() if not k.startswith("_")},
                 "summary": summary,
             })
 

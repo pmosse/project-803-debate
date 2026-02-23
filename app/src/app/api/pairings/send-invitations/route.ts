@@ -58,6 +58,12 @@ export async function POST(req: NextRequest) {
       ? new Date(assignment.debateDeadline).toLocaleDateString()
       : "TBD";
 
+    // Extract suggested times from matchmakingReason if present
+    const timesMatch = pairing.matchmakingReason?.match(
+      /\[Suggested times: (.+?)\]/
+    );
+    const suggestedTimes = timesMatch?.[1] || undefined;
+
     for (const student of [studentA, studentB]) {
       if (!student?.email) continue;
       try {
@@ -67,6 +73,7 @@ export async function POST(req: NextRequest) {
           assignmentTitle: assignment.title,
           debateLink,
           debateDeadline: deadline,
+          suggestedTimes,
         });
         sent++;
       } catch {

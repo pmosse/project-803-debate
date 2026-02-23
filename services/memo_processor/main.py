@@ -101,7 +101,7 @@ async def process_memo(request: ProcessRequest):
 
         # Analyze with Claude
         try:
-            analysis = analyze_memo(extracted_text, prompt_text)
+            analysis = analyze_memo(extracted_text, prompt_text, assignment_id=assignment_id, memo_id=memo_id)
         except Exception as e:
             cur.execute(
                 "UPDATE memos SET status = 'error' WHERE id = %s", (memo_id,)

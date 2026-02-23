@@ -87,6 +87,7 @@ export const assignments = pgTable("assignments", {
   >(),
   memoDeadline: timestamp("memo_deadline"),
   debateDeadline: timestamp("debate_deadline"),
+  classId: uuid("class_id").references(() => classes.id),
   courseCode: text("course_code").notNull(),
   emailDomain: text("email_domain"),
   accessCode: text("access_code"),
@@ -226,6 +227,7 @@ export const assignmentEnrollments = pgTable("assignment_enrollments", {
   studentId: uuid("student_id")
     .references(() => users.id)
     .notNull(),
+  availability: jsonb("availability").$type<Record<string, string[]>>(),
   enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
 });
 

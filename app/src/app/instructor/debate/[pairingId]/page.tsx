@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EvaluationRadar } from "@/components/instructor/evaluation-radar";
+import { CriteriaScoresDisplay } from "@/components/instructor/criteria-scores-display";
 import { ArrowLeft } from "lucide-react";
 
 export default async function DebateDetailPage({
@@ -132,14 +133,27 @@ export default async function DebateDetailPage({
                 </div>
               </div>
 
-              <EvaluationRadar
-                data={[
-                  { dimension: "Opening", score: Number(evaluation.openingClarity) || 0 },
-                  { dimension: "Rebuttal", score: Number(evaluation.rebuttalQuality) || 0 },
-                  { dimension: "Reading", score: Number(evaluation.readingAccuracy) || 0 },
-                  { dimension: "Evidence", score: Number(evaluation.evidenceUse) || 0 },
-                ]}
-              />
+              {evaluation.criteriaScores ? (
+                <CriteriaScoresDisplay
+                  criteriaScores={
+                    evaluation.criteriaScores as {
+                      criterion: string;
+                      score: number;
+                      maxPoints: number;
+                      reasoning: string;
+                    }[]
+                  }
+                />
+              ) : (
+                <EvaluationRadar
+                  data={[
+                    { dimension: "Opening", score: Number(evaluation.openingClarity) || 0 },
+                    { dimension: "Rebuttal", score: Number(evaluation.rebuttalQuality) || 0 },
+                    { dimension: "Reading", score: Number(evaluation.readingAccuracy) || 0 },
+                    { dimension: "Evidence", score: Number(evaluation.evidenceUse) || 0 },
+                  ]}
+                />
+              )}
 
               {(evaluation.integrityFlags as string[] | null)?.length ? (
                 <div>

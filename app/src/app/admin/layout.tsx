@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { LayoutDashboard, School, GraduationCap, LogOut } from "lucide-react";
+import { LayoutDashboard, School, GraduationCap, DollarSign } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 
 export default async function AdminLayout({
@@ -45,6 +45,13 @@ export default async function AdminLayout({
           >
             <GraduationCap className="h-4 w-4" />
             Professors
+          </Link>
+          <Link
+            href="/admin/costs"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <DollarSign className="h-4 w-4" />
+            Costs
           </Link>
           <div className="my-2 border-t border-white/10" />
           <Link

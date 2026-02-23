@@ -9,6 +9,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { ExternalLink, Calendar } from "lucide-react";
 import { MemoUpload } from "@/components/student/memo-upload";
 import { PositionConfirmation } from "@/components/student/position-confirmation";
+import { MemoDeleteButton } from "@/components/student/memo-delete-button";
+import { MemoProcessingStatus } from "@/components/student/memo-processing-status";
 
 export default async function AssignmentDetail({
   params,
@@ -97,7 +99,10 @@ export default async function AssignmentDetail({
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               Your Memo
-              {memo && <StatusBadge status={memo.status} />}
+              <div className="flex items-center gap-2">
+                {memo && <StatusBadge status={memo.status} />}
+                {memo && <MemoDeleteButton memoId={memo.id} />}
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -125,15 +130,7 @@ export default async function AssignmentDetail({
                 be paired with a classmate soon.
               </p>
             ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-gray-500">
-                  Your memo is being processed. This usually takes less than a
-                  minute.
-                </p>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                  <div className="h-full w-2/3 animate-pulse rounded-full bg-[#B9D9EB]" />
-                </div>
-              </div>
+              <MemoProcessingStatus status={memo.status} />
             )}
           </CardContent>
         </Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,12 +10,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlusCircle, Trash2, Loader2 } from "lucide-react";
+import { RubricBuilder } from "@/components/instructor/rubric-builder";
+
+interface ProfessorClass {
+  id: string;
+  name: string;
+  code: string;
+}
+
+const rubricCriterionSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string(),
+  maxPoints: z.number().min(1, "Min 1").max(10, "Max 10"),
+});
 
 const schema = z.object({
+  classId: z.string().min(1, "Class is required"),
   title: z.string().min(1, "Title is required"),
   promptText: z.string().min(1, "Prompt is required"),
   rubricText: z.string().optional(),
+  rubricCriteria: z
+    .array(rubricCriterionSchema)
+    .max(10, "Maximum 10 criteria")
+    .optional()
+    .transform((criteria) => criteria?.filter((c) => c.name.trim()))
+    .refine(
+      (criteria) => {
+        if (!criteria || criteria.length === 0) return true;
+        const total = criteria.reduce((s, c) => s + c.maxPoints, 0);
+        return total <= 100;
+      },
+      { message: "Total points cannot exceed 100" }
+    ),
   courseCode: z.string().optional(),
+  emailDomain: z.string().optional(),
+  accessCode: z.string().optional(),
   memoDeadline: z.string().optional(),
   debateDeadline: z.string().optional(),
   readingLinks: z
@@ -37,6 +66,14 @@ export default function NewAssignment() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [professorClasses, setProfessorClasses] = useState<ProfessorClass[]>([]);
+
+  useEffect(() => {
+    fetch("/api/professor/classes")
+      .then((r) => r.json())
+      .then((data) => setProfessorClasses(data))
+      .catch(() => {});
+  }, []);
 
   const {
     register,
@@ -47,6 +84,7 @@ export default function NewAssignment() {
     resolver: zodResolver(schema),
     defaultValues: {
       readingLinks: [],
+      rubricCriteria: [],
     },
   });
 
@@ -86,6 +124,32 @@ export default function NewAssignment() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
+            <CardTitle className="text-base">Class</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="classId">Assign to Class</Label>
+              <select
+                id="classId"
+                {...register("classId")}
+                className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#B9D9EB] focus:border-[#1D4F91]"
+              >
+                <option value="">Select a class...</option>
+                {professorClasses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+              {errors.classId && (
+                <p className="text-sm text-red-600">{errors.classId.message}</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-base">Basic Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -116,16 +180,61 @@ export default function NewAssignment() {
                 </p>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Rubric</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <RubricBuilder
+              control={control}
+              register={register}
+              errors={errors}
+            />
 
             <div className="space-y-2">
-              <Label htmlFor="rubricText">Rubric (optional)</Label>
+              <Label htmlFor="rubricText">
+                Additional Rubric Notes (optional)
+              </Label>
               <textarea
                 id="rubricText"
                 {...register("rubricText")}
-                rows={4}
+                rows={3}
                 className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B9D9EB] focus:border-[#1D4F91]"
-                placeholder="Enter the rubric..."
+                placeholder="Any additional rubric guidance..."
               />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Student Access</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="emailDomain">Email Domain (optional)</Label>
+              <Input
+                id="emailDomain"
+                {...register("emailDomain")}
+                placeholder="e.g., columbia.edu"
+              />
+              <p className="text-xs text-gray-500">
+                Restrict student signup to emails ending with this domain
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="accessCode">Access Code (optional)</Label>
+              <Input
+                id="accessCode"
+                {...register("accessCode")}
+                placeholder="e.g., ECON803"
+              />
+              <p className="text-xs text-gray-500">
+                Students must enter this code to sign up
+              </p>
             </div>
           </CardContent>
         </Card>

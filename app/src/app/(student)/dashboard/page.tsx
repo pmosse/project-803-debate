@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { assignments, memos, pairings } from "@/lib/db/schema";
-import { eq, or } from "drizzle-orm";
+import { assignments, memos, pairings, classMemberships, assignmentEnrollments, type Assignment } from "@/lib/db/schema";
+import { eq, or, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -23,7 +23,45 @@ export default async function StudentDashboard() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const allAssignments = await db.select().from(assignments);
+  // Get student's class memberships
+  const studentMemberships = await db
+    .select({ classId: classMemberships.classId })
+    .from(classMemberships)
+    .where(eq(classMemberships.userId, session.user.id));
+  const studentClassIds = studentMemberships.map((m) => m.classId);
+
+  // Also get assignment IDs from direct enrollments (backward compat)
+  const enrollmentRows = await db
+    .select({ assignmentId: assignmentEnrollments.assignmentId })
+    .from(assignmentEnrollments)
+    .where(eq(assignmentEnrollments.studentId, session.user.id));
+  const enrolledAssignmentIds = enrollmentRows.map((e) => e.assignmentId);
+
+  // Filter: assignments from their classes + assignments they're directly enrolled in
+  let allAssignments: Assignment[];
+  if (studentClassIds.length > 0 && enrolledAssignmentIds.length > 0) {
+    allAssignments = await db
+      .select()
+      .from(assignments)
+      .where(
+        or(
+          inArray(assignments.classId, studentClassIds),
+          inArray(assignments.id, enrolledAssignmentIds)
+        )
+      );
+  } else if (studentClassIds.length > 0) {
+    allAssignments = await db
+      .select()
+      .from(assignments)
+      .where(inArray(assignments.classId, studentClassIds));
+  } else if (enrolledAssignmentIds.length > 0) {
+    allAssignments = await db
+      .select()
+      .from(assignments)
+      .where(inArray(assignments.id, enrolledAssignmentIds));
+  } else {
+    allAssignments = [];
+  }
 
   const studentMemos = await db
     .select()

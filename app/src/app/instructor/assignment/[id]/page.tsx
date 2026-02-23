@@ -8,6 +8,8 @@ import {
   pairings,
   debateSessions,
   evaluations,
+  classMemberships,
+  classes,
 } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import Link from "next/link";
@@ -20,6 +22,7 @@ import { PairingControls } from "@/components/instructor/pairing-controls";
 import { ResetCaseButton } from "@/components/instructor/reset-case-button";
 import { ResetDebateButton } from "@/components/instructor/reset-debate-button";
 import { ImpersonateButton } from "@/components/instructor/impersonate-button";
+import { SignupLinkCard } from "@/components/instructor/signup-link-card";
 import { Users as UsersIcon, FileText } from "lucide-react";
 
 export default async function InstructorAssignmentDetail({
@@ -39,12 +42,35 @@ export default async function InstructorAssignmentDetail({
 
   if (!assignment) redirect("/instructor/dashboard");
 
-  const students = await db
-    .select()
-    .from(users)
-    .where(
-      and(eq(users.courseCode, assignment.courseCode), eq(users.role, "student"))
-    );
+  // Get students: prefer class membership if assignment has classId, else fall back to courseCode
+  let students;
+  let className: string | null = null;
+  if (assignment.classId) {
+    const memberRows = await db
+      .select({ userId: classMemberships.userId })
+      .from(classMemberships)
+      .where(eq(classMemberships.classId, assignment.classId));
+    const memberIds = memberRows.map((m) => m.userId);
+    students = memberIds.length > 0
+      ? await db
+          .select()
+          .from(users)
+          .where(and(inArray(users.id, memberIds), eq(users.role, "student")))
+      : [];
+    const [classRow] = await db
+      .select({ name: classes.name })
+      .from(classes)
+      .where(eq(classes.id, assignment.classId))
+      .limit(1);
+    className = classRow?.name || null;
+  } else {
+    students = await db
+      .select()
+      .from(users)
+      .where(
+        and(eq(users.courseCode, assignment.courseCode), eq(users.role, "student"))
+      );
+  }
 
   const allMemos = await db
     .select()
@@ -92,7 +118,7 @@ export default async function InstructorAssignmentDetail({
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">{assignment.title}</h1>
         <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
-          <Badge>{assignment.courseCode}</Badge>
+          <Badge>{className || assignment.courseCode}</Badge>
           <span className="flex items-center gap-1">
             <UsersIcon className="h-3.5 w-3.5" />
             {students.length} students
@@ -159,6 +185,14 @@ export default async function InstructorAssignmentDetail({
               </p>
             </CardContent>
           </Card>
+
+          <div className="mt-4">
+            <SignupLinkCard
+              assignmentId={id}
+              emailDomain={assignment.emailDomain}
+              accessCode={assignment.accessCode}
+            />
+          </div>
 
           <Card className="mt-4 border-red-200">
             <CardHeader>

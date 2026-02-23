@@ -54,20 +54,29 @@ export async function POST(
   }
 
   const { id } = await params;
-  const { email } = await req.json();
+  const { userId, email } = await req.json();
 
-  if (!email) {
-    return NextResponse.json({ error: "Email is required" }, { status: 400 });
+  if (!userId && !email) {
+    return NextResponse.json({ error: "userId or email is required" }, { status: 400 });
   }
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  let user;
+  if (userId) {
+    [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+  } else {
+    [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+  }
 
   if (!user) {
-    return NextResponse.json({ error: "User not found with that email" }, { status: 404 });
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
   // Check if already a member

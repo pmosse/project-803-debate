@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isPrivilegedRole } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
-import { assignments } from "@/lib/db/schema";
+import { assignments, classes, classMemberships } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 
 const rubricCriterionSchema = z.object({
@@ -25,6 +26,7 @@ const createSchema = z.object({
     .optional(),
   memoDeadline: z.string().optional(),
   debateDeadline: z.string().optional(),
+  classId: z.string().uuid().optional(),
   courseCode: z.string().optional(),
   emailDomain: z.string().optional(),
   accessCode: z.string().optional(),
@@ -54,6 +56,44 @@ export async function POST(req: NextRequest) {
     rubricText = rubricText ? `${generated}\n\n${rubricText}` : generated;
   }
 
+  // If classId provided, validate professor is a member and derive courseCode
+  let classId: string | undefined;
+  let courseCode =
+    parsed.data.courseCode ||
+    (session.user as any).courseCode ||
+    "DEFAULT";
+
+  if (parsed.data.classId) {
+    const [membership] = await db
+      .select()
+      .from(classMemberships)
+      .where(
+        and(
+          eq(classMemberships.classId, parsed.data.classId),
+          eq(classMemberships.userId, session.user.id)
+        )
+      )
+      .limit(1);
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: "You are not a member of this class" },
+        { status: 403 }
+      );
+    }
+
+    const [classRow] = await db
+      .select()
+      .from(classes)
+      .where(eq(classes.id, parsed.data.classId))
+      .limit(1);
+
+    if (classRow) {
+      classId = classRow.id;
+      courseCode = classRow.code;
+    }
+  }
+
   const [assignment] = await db
     .insert(assignments)
     .values({
@@ -71,10 +111,8 @@ export async function POST(req: NextRequest) {
       debateDeadline: parsed.data.debateDeadline
         ? new Date(parsed.data.debateDeadline)
         : undefined,
-      courseCode:
-        parsed.data.courseCode ||
-        (session.user as any).courseCode ||
-        "DEFAULT",
+      classId,
+      courseCode,
       emailDomain: parsed.data.emailDomain || undefined,
       accessCode: parsed.data.accessCode || undefined,
       createdBy: session.user.id,

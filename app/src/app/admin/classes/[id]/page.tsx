@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, useCallback, use } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,13 @@ interface ClassDetail {
   members: Member[];
 }
 
+interface SearchResult {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string;
+}
+
 export default function ClassDetailPage({
   params,
 }: {
@@ -35,8 +42,13 @@ export default function ClassDetailPage({
   const [classData, setClassData] = useState<ClassDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [email, setEmail] = useState("");
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SearchResult | null>(null);
   const [error, setError] = useState("");
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   async function fetchClass() {
     const res = await fetch(`/api/admin/classes/${id}/members`);
@@ -51,17 +63,63 @@ export default function ClassDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const searchUsers = useCallback(async (q: string) => {
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(q)}`);
+    if (res.ok) {
+      const data: SearchResult[] = await res.json();
+      // Filter out existing members
+      const memberIds = new Set(classData?.members.map((m) => m.id) || []);
+      setSuggestions(data.filter((u) => !memberIds.has(u.id)));
+      setShowSuggestions(true);
+    }
+  }, [classData]);
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    setSelectedUser(null);
+    setError("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => searchUsers(value), 300);
+  }
+
+  function handleSelectUser(user: SearchResult) {
+    setSelectedUser(user);
+    setQuery(`${user.name} (${user.email})`);
+    setShowSuggestions(false);
+    setSuggestions([]);
+  }
+
   async function handleAddMember(e: React.FormEvent) {
     e.preventDefault();
+    if (!selectedUser) {
+      setError("Please select a user from the suggestions");
+      return;
+    }
     setAdding(true);
     setError("");
     const res = await fetch(`/api/admin/classes/${id}/members`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ userId: selectedUser.id }),
     });
     if (res.ok) {
-      setEmail("");
+      setQuery("");
+      setSelectedUser(null);
       fetchClass();
     } else {
       const data = await res.json();
@@ -112,18 +170,43 @@ export default function ClassDetailPage({
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAddMember} className="flex items-end gap-3">
-            <div className="flex-1 space-y-1">
-              <Label htmlFor="email">User Email</Label>
+            <div className="relative flex-1 space-y-1" ref={dropdownRef}>
+              <Label htmlFor="search">Search User</Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@columbia.edu"
-                required
+                id="search"
+                type="text"
+                value={query}
+                onChange={(e) => handleQueryChange(e.target.value)}
+                placeholder="Type a name or email..."
+                autoComplete="off"
               />
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg">
+                  {suggestions.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50"
+                      onClick={() => handleSelectUser(user)}
+                    >
+                      <div>
+                        <div className="font-medium text-gray-900">{user.name}</div>
+                        <div className="text-xs text-gray-400">{user.email}</div>
+                      </div>
+                      <Badge variant={user.role === "professor" ? "default" : "secondary"}>
+                        {user.role}
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showSuggestions && query.length >= 2 && suggestions.length === 0 && (
+                <div className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-400 shadow-lg">
+                  No users found
+                </div>
+              )}
             </div>
-            <Button type="submit" disabled={adding}>
+            <Button type="submit" disabled={adding || !selectedUser}>
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               Add
             </Button>

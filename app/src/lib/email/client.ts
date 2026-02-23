@@ -16,6 +16,7 @@ export async function sendDebateInvitation({
   debateLink,
   debateDeadline,
   instructorEmail,
+  suggestedTimes,
 }: {
   to: string;
   studentName: string;
@@ -23,6 +24,7 @@ export async function sendDebateInvitation({
   debateLink: string;
   debateDeadline: string;
   instructorEmail?: string;
+  suggestedTimes?: string;
 }) {
   return getResend().emails.send({
     from: fromEmail,
@@ -33,6 +35,7 @@ export async function sendDebateInvitation({
       <p>You've been paired with a classmate for your oral debate on the <strong>${assignmentTitle}</strong> case.</p>
       <p><strong>Join your debate here:</strong> <a href="${debateLink}">${debateLink}</a></p>
       <p><strong>Deadline to complete:</strong> ${debateDeadline}</p>
+      ${suggestedTimes ? `<p><strong>Suggested meeting times:</strong> Based on your availability, you and your partner should both be free on: <strong>${suggestedTimes}</strong></p>` : ""}
       <h3>What to expect:</h3>
       <ul>
         <li>A ~15 minute structured debate with an AI moderator</li>
@@ -46,6 +49,29 @@ export async function sendDebateInvitation({
         <li>A webcam and microphone are required</li>
       </ul>
       ${instructorEmail ? `<p>Questions? Contact <a href="mailto:${instructorEmail}">${instructorEmail}</a></p>` : ""}
+    `,
+  });
+}
+
+export async function sendVerificationCode({
+  to,
+  code,
+  assignmentTitle,
+}: {
+  to: string;
+  code: string;
+  assignmentTitle: string;
+}) {
+  return getResend().emails.send({
+    from: fromEmail,
+    to,
+    subject: `Your verification code: ${code}`,
+    html: `
+      <p>Hi,</p>
+      <p>Your verification code to sign up for <strong>${assignmentTitle}</strong> is:</p>
+      <p style="font-size: 32px; font-weight: bold; letter-spacing: 4px; margin: 20px 0;">${code}</p>
+      <p>This code expires in 15 minutes.</p>
+      <p>If you didn't request this, you can ignore this email.</p>
     `,
   });
 }

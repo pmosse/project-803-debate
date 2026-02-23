@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { debateSessions, pairings, memos, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
+import { logUsage } from "@/lib/usage-logger";
 
 const anthropic = new Anthropic();
 
@@ -86,6 +87,16 @@ Address them as "you". Use their name ${firstName} naturally. Write in plain tex
     });
 
     const debrief = response.content[0].type === "text" ? response.content[0].text : "";
+
+    logUsage({
+      service: "claude",
+      model: response.model,
+      callType: "debrief",
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      assignmentId: pairing.assignmentId,
+      pairingId,
+    });
 
     return NextResponse.json({ debrief, studentRole: studentLabel });
   } catch (e) {

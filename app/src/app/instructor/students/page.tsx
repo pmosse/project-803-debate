@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { users, memos, pairings, assignments } from "@/lib/db/schema";
-import { eq, and, or } from "drizzle-orm";
+import { users, memos, pairings, assignments, classMemberships, classes } from "@/lib/db/schema";
+import { eq, and, or, inArray } from "drizzle-orm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -12,13 +12,58 @@ export default async function InstructorStudentsPage() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const courseCode = (session.user as any).courseCode;
-  if (!courseCode) redirect("/instructor/dashboard");
+  // Get professor's class memberships
+  const profMemberships = await db
+    .select({ classId: classMemberships.classId })
+    .from(classMemberships)
+    .where(eq(classMemberships.userId, session.user.id));
+  const profClassIds = profMemberships.map((m) => m.classId);
 
-  const students = await db
-    .select()
-    .from(users)
-    .where(and(eq(users.courseCode, courseCode), eq(users.role, "student")));
+  // Build class name map
+  const classRows = profClassIds.length > 0
+    ? await db
+        .select({ id: classes.id, name: classes.name })
+        .from(classes)
+        .where(inArray(classes.id, profClassIds))
+    : [];
+  const classNameMap = Object.fromEntries(classRows.map((c) => [c.id, c.name]));
+
+  // Get student members from those classes
+  let students: (typeof users.$inferSelect)[] = [];
+  let studentClassMap: Record<string, string[]> = {};
+
+  if (profClassIds.length > 0) {
+    const memberRows = await db
+      .select({ userId: classMemberships.userId, classId: classMemberships.classId })
+      .from(classMemberships)
+      .where(inArray(classMemberships.classId, profClassIds));
+
+    const studentIds = [...new Set(memberRows.map((m) => m.userId))];
+    // Build map of studentId -> class names
+    for (const m of memberRows) {
+      if (!studentClassMap[m.userId]) studentClassMap[m.userId] = [];
+      const name = classNameMap[m.classId];
+      if (name && !studentClassMap[m.userId].includes(name)) {
+        studentClassMap[m.userId].push(name);
+      }
+    }
+
+    students = studentIds.length > 0
+      ? await db
+          .select()
+          .from(users)
+          .where(and(inArray(users.id, studentIds), eq(users.role, "student")))
+      : [];
+  } else {
+    // Fallback: use courseCode
+    const courseCode = (session.user as any).courseCode;
+    if (courseCode) {
+      students = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.courseCode, courseCode), eq(users.role, "student")));
+    }
+  }
 
   const allMemos = await db
     .select()
@@ -28,10 +73,15 @@ export default async function InstructorStudentsPage() {
     .select()
     .from(pairings);
 
-  const courseAssignments = await db
-    .select()
-    .from(assignments)
-    .where(eq(assignments.courseCode, courseCode));
+  const courseAssignments = profClassIds.length > 0
+    ? await db
+        .select()
+        .from(assignments)
+        .where(inArray(assignments.classId, profClassIds))
+    : await db
+        .select()
+        .from(assignments)
+        .where(eq(assignments.createdBy, session.user.id));
 
   // Build student data
   const studentData = students.map((student) => {
@@ -56,7 +106,10 @@ export default async function InstructorStudentsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Students</h1>
         <p className="mt-1 text-sm text-gray-500">
-          {students.length} students enrolled in <Badge>{courseCode}</Badge>
+          {students.length} students across{" "}
+          {classRows.length > 0
+            ? classRows.map((c) => c.name).join(", ")
+            : "your courses"}
         </p>
       </div>
 
@@ -67,6 +120,7 @@ export default async function InstructorStudentsPage() {
               <tr className="border-b text-left text-sm text-gray-500">
                 <th className="p-4 font-medium">Name</th>
                 <th className="p-4 font-medium">Email</th>
+                <th className="p-4 font-medium">Class</th>
                 <th className="p-4 font-medium">Memos</th>
                 <th className="p-4 font-medium">Debates</th>
                 <th className="p-4 font-medium w-[1%]"></th>
@@ -85,6 +139,9 @@ export default async function InstructorStudentsPage() {
                   </td>
                   <td className="p-4 text-sm text-gray-500">
                     {student.email || "—"}
+                  </td>
+                  <td className="p-4 text-sm text-gray-500">
+                    {studentClassMap[student.id]?.join(", ") || "—"}
                   </td>
                   <td className="p-4 text-sm text-gray-600">
                     {analyzedCount}/{memoCount > 0 ? memoCount : courseAssignments.length} analyzed

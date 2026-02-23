@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { assignments, memos, users } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { assignments, memos, users, classMemberships, classes } from "@/lib/db/schema";
+import { eq, sql, inArray, or } from "drizzle-orm";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,22 @@ import { Calendar, Users, FileText } from "lucide-react";
 export default async function InstructorDashboard() {
   const session = await auth();
   if (!session) redirect("/login");
+
+  // Get professor's class IDs
+  const profMemberships = await db
+    .select({ classId: classMemberships.classId })
+    .from(classMemberships)
+    .where(eq(classMemberships.userId, session.user.id));
+  const profClassIds = profMemberships.map((m) => m.classId);
+
+  // Build a map of classId -> class name
+  const classRows = profClassIds.length > 0
+    ? await db
+        .select({ id: classes.id, name: classes.name })
+        .from(classes)
+        .where(inArray(classes.id, profClassIds))
+    : [];
+  const classNameMap = Object.fromEntries(classRows.map((c) => [c.id, c.name]));
 
   const allAssignments = await db
     .select({
@@ -28,7 +44,14 @@ export default async function InstructorDashboard() {
       )`.as("memo_count"),
     })
     .from(assignments)
-    .where(eq(assignments.createdBy, session.user.id));
+    .where(
+      profClassIds.length > 0
+        ? or(
+            eq(assignments.createdBy, session.user.id),
+            inArray(assignments.classId, profClassIds)
+          )
+        : eq(assignments.createdBy, session.user.id)
+    );
 
   return (
     <div>
@@ -60,7 +83,7 @@ export default async function InstructorDashboard() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <CardTitle>{a.title}</CardTitle>
-                    <Badge>{a.courseCode}</Badge>
+                    <Badge>{a.classId ? classNameMap[a.classId] || a.courseCode : a.courseCode}</Badge>
                   </div>
                   <div className="mt-2 flex items-center gap-6 text-sm text-gray-500">
                     <span className="flex items-center gap-1">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { pairings, memos, users } from "@/lib/db/schema";
+import { pairings, memos, users, assignmentEnrollments } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { createRoom } from "@/lib/daily/client";
 import Anthropic from "@anthropic-ai/sdk";
@@ -15,6 +15,7 @@ interface MemoForPairing {
   thesis: string;
   keyClaims: string[];
   stanceStrength: string;
+  availability?: Record<string, string[]> | null;
 }
 
 interface ClaudePair {
@@ -22,6 +23,7 @@ interface ClaudePair {
   student_b_id: string;
   debate_topic: string;
   reason: string;
+  suggested_times?: string;
 }
 
 async function clusterAndPairWithClaude(
@@ -31,12 +33,19 @@ async function clusterAndPairWithClaude(
 
   const studentSummaries = studentMemos
     .map(
-      (m) =>
-        `${m.studentName} (ID: ${m.studentId}):
+      (m) => {
+        const availStr = m.availability && Object.keys(m.availability).length > 0
+          ? Object.entries(m.availability)
+              .map(([day, blocks]) => `${day}: ${blocks.join(", ")}`)
+              .join("; ")
+          : "not provided";
+        return `${m.studentName} (ID: ${m.studentId}):
   - Position: ${m.position}
   - Thesis: ${m.thesis}
   - Key Claims: ${m.keyClaims.join("; ")}
-  - Stance Strength: ${m.stanceStrength}`
+  - Stance Strength: ${m.stanceStrength}
+  - Availability: ${availStr}`;
+      }
     )
     .join("\n\n");
 
@@ -53,7 +62,8 @@ RULES:
 2. Two students with the SAME overall position (both "net_positive") CAN be paired if their specific claims and reasoning differ significantly. For example, one might argue Walmart creates jobs while another argues Walmart lowers prices — they can debate which factor matters more.
 3. Two students with OPPOSING positions should be paired when their specific claims directly contradict each other, creating clear debate lines.
 4. Prioritize pairing students whose claims reference the SAME readings but draw different conclusions.
-5. If there's an odd number of students, leave the one whose arguments overlap most with an already-paired student as unpaired.
+5. STRONGLY prefer pairing students whose available time slots overlap. If two students share overlapping availability, that's a significant bonus for pairing them.
+6. If there's an odd number of students, leave the one whose arguments overlap most with an already-paired student as unpaired.
 
 STUDENTS:
 ${studentSummaries}
@@ -65,7 +75,8 @@ Respond with valid JSON only, no markdown:
       "student_a_id": "...",
       "student_b_id": "...",
       "debate_topic": "A short phrase describing the core disagreement",
-      "reason": "One sentence explaining why these two should debate, referring to students by name"
+      "reason": "One sentence explaining why these two should debate, referring to students by name",
+      "suggested_times": "Overlapping day+block combos (e.g. 'Thursday morning, Friday afternoon'), or empty string if no overlap or availability unknown"
     }
   ],
   "unpaired": ["student_id_1"]
@@ -127,6 +138,15 @@ export async function POST(req: NextRequest) {
 
   const studentMap = new Map(studentRows.map((s) => [s.id, s]));
 
+  // Fetch availability from enrollments
+  const enrollmentRows = await db
+    .select()
+    .from(assignmentEnrollments)
+    .where(eq(assignmentEnrollments.assignmentId, assignmentId));
+  const availabilityMap = new Map(
+    enrollmentRows.map((e) => [e.studentId, e.availability])
+  );
+
   // Build memo summaries for Claude
   const memoSummaries: MemoForPairing[] = analyzed.map((m) => {
     const student = studentMap.get(m.studentId);
@@ -138,6 +158,7 @@ export async function POST(req: NextRequest) {
       thesis: analysis?.thesis || "",
       keyClaims: analysis?.key_claims || [],
       stanceStrength: analysis?.stance_strength || "moderate",
+      availability: availabilityMap.get(m.studentId),
     };
   });
 
@@ -166,9 +187,12 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    const reason = pair.debate_topic
+    let reason = pair.debate_topic
       ? `${pair.debate_topic} — ${pair.reason}`
       : pair.reason;
+    if (pair.suggested_times) {
+      reason += ` [Suggested times: ${pair.suggested_times}]`;
+    }
 
     const [newPairing] = await db
       .insert(pairings)
