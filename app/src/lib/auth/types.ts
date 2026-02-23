@@ -2,7 +2,7 @@ import "next-auth";
 
 declare module "next-auth" {
   interface User {
-    role?: string;
+    role?: "student" | "professor" | "super_admin";
     courseCode?: string | null;
   }
 
@@ -11,7 +11,7 @@ declare module "next-auth" {
       id: string;
       name: string;
       email?: string | null;
-      role: string;
+      role: "student" | "professor" | "super_admin";
       courseCode: string | null;
     };
   }

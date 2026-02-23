@@ -14,6 +14,15 @@ import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward } from "lucide-reac
 import type { DebatePhase } from "@/lib/hooks/use-debate-store";
 import { Check, Bot, WifiOff, Loader2 } from "lucide-react";
 
+function speakMessage(text: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  window.speechSynthesis.speak(utterance);
+}
+
 function AiStatusIndicator({
   connectionStatus,
   transcriptCount,
@@ -146,6 +155,80 @@ function PhaseTimeline({
   );
 }
 
+function ReadyCheckOverlay({
+  message,
+  readyA,
+  readyB,
+  studentRole,
+  studentName,
+  opponentName,
+  onReady,
+}: {
+  message: string;
+  readyA: boolean;
+  readyB: boolean;
+  studentRole: "A" | "B";
+  studentName: string;
+  opponentName: string;
+  onReady: () => void;
+}) {
+  const myReady = studentRole === "A" ? readyA : readyB;
+  const theirReady = studentRole === "A" ? readyB : readyA;
+  const myFirst = studentName.split(" ")[0];
+  const theirFirst = opponentName.split(" ")[0];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+        <div className="mb-4 flex items-center gap-2">
+          <Bot className="h-5 w-5 text-[#1D4F91]" />
+          <h3 className="text-lg font-semibold text-gray-900">Phase Transition</h3>
+        </div>
+
+        {message && (
+          <p className="mb-5 text-sm text-gray-600 leading-relaxed">{message}</p>
+        )}
+
+        <div className="mb-5 flex gap-3">
+          <div className={`flex-1 rounded-lg border-2 p-3 text-center transition-colors ${
+            myReady ? "border-green-500 bg-green-50" : "border-gray-200"
+          }`}>
+            <div className="text-xs text-gray-500">{myFirst} (You)</div>
+            <div className="mt-1">
+              {myReady ? (
+                <Check className="mx-auto h-5 w-5 text-green-600" />
+              ) : (
+                <div className="mx-auto h-5 w-5 rounded-full border-2 border-gray-300" />
+              )}
+            </div>
+          </div>
+          <div className={`flex-1 rounded-lg border-2 p-3 text-center transition-colors ${
+            theirReady ? "border-green-500 bg-green-50" : "border-gray-200"
+          }`}>
+            <div className="text-xs text-gray-500">{theirFirst}</div>
+            <div className="mt-1">
+              {theirReady ? (
+                <Check className="mx-auto h-5 w-5 text-green-600" />
+              ) : (
+                <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <Button
+          onClick={onReady}
+          disabled={myReady}
+          className="w-full"
+          size="lg"
+        >
+          {myReady ? "Waiting for opponent..." : "I'm Ready"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 interface DebateSessionProps {
   pairingId: string;
   assignmentTitle: string;
@@ -171,11 +254,32 @@ export function DebateSession({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const phaseFromRemoteRef = useRef(false);
+  const readyCheckSentRef = useRef(false);
   const [micEnabled, setMicEnabled] = useState(true);
   const [camEnabled, setCamEnabled] = useState(true);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [dailyToken, setDailyToken] = useState<string | null>(null);
   const [consentGiven, setConsentGiven] = useState(false);
+
+  // Send ready_check_start when grace period triggers readyCheck with empty message
+  // (i.e., the store set readyCheck but no server message yet)
+  useEffect(() => {
+    if (store.readyCheck && !store.readyCheckMessage && !readyCheckSentRef.current) {
+      readyCheckSentRef.current = true;
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const nextPhase = store.readyCheckNextPhase;
+        ws.send(JSON.stringify({
+          type: "ready_check_start",
+          current_phase: store.phase,
+          next_phase: nextPhase,
+        }));
+      }
+    }
+    if (!store.readyCheck) {
+      readyCheckSentRef.current = false;
+    }
+  }, [store.readyCheck, store.readyCheckMessage, store.readyCheckNextPhase, store.phase]);
 
   // Initialize session
   useEffect(() => {
@@ -252,7 +356,7 @@ export function DebateSession({
           targetStudent: data.target_student,
         });
       } else if (data.type === "phase_advance") {
-        const phase = data.phase as import("@/lib/hooks/use-debate-store").DebatePhase;
+        const phase = data.phase as DebatePhase;
         phaseFromRemoteRef.current = true;
         if (phase && phase !== store.phase) {
           store.setPhase(phase);
@@ -260,11 +364,19 @@ export function DebateSession({
           store.advancePhase();
         }
       } else if (data.type === "sync") {
-        const phase = data.phase as import("@/lib/hooks/use-debate-store").DebatePhase;
+        const phase = data.phase as DebatePhase;
         if (phase && phase !== "opening_a") {
-          // Late joiner — sync to current phase with elapsed time
           store.syncPhase(phase, data.elapsed || 0);
         }
+      } else if (data.type === "ready_check") {
+        // Server sends ready check with AI transition message
+        const nextPhase = data.next_phase as DebatePhase;
+        store.startReadyCheck(data.message || "", nextPhase);
+        if (data.message) {
+          speakMessage(data.message);
+        }
+      } else if (data.type === "ready_update") {
+        store.updateReadyState(data.ready_a, data.ready_b);
       }
     };
 
@@ -359,6 +471,40 @@ export function DebateSession({
     wsRef.current?.close();
   }, [pairingId, store]);
 
+  const handleReadyClick = useCallback(() => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "ready_signal",
+        student: studentRole,
+      }));
+    }
+    // Optimistically mark self as ready
+    if (studentRole === "A") {
+      store.updateReadyState(true, store.readyB);
+    } else {
+      store.updateReadyState(store.readyA, true);
+    }
+  }, [store, studentRole]);
+
+  const handleSkip = useCallback(() => {
+    const currentConfig = PHASE_CONFIG[store.phase];
+    const nextPhase = currentConfig.next;
+    if (!nextPhase) return;
+
+    // Send ready_check_start to server instead of immediate advance
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "ready_check_start",
+        current_phase: store.phase,
+        next_phase: nextPhase,
+      }));
+    }
+    // Set local readyCheck state (server will broadcast ready_check with message)
+    store.startReadyCheck("", nextPhase);
+  }, [store]);
+
   // Loading state while session initializes
   if (store.phase === "waiting") {
     return (
@@ -381,8 +527,25 @@ export function DebateSession({
 
   const isActiveDebate = store.phase !== "consent";
 
+  const isMySpeakingTurn =
+    (store.phase.endsWith("_a") && studentRole === "A") ||
+    (store.phase.endsWith("_b") && studentRole === "B");
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
+      {/* Ready check overlay */}
+      {store.readyCheck && store.readyCheckMessage && (
+        <ReadyCheckOverlay
+          message={store.readyCheckMessage}
+          readyA={store.readyA}
+          readyB={store.readyB}
+          studentRole={studentRole}
+          studentName={studentName}
+          opponentName={opponentName}
+          onReady={handleReadyClick}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between border-b bg-white px-4 py-2">
         <div className="flex items-center gap-3">
@@ -470,19 +633,10 @@ export function DebateSession({
       )}
 
       {/* Floating skip button — visible when it's the active speaker's turn */}
-      {isActiveDebate && PHASE_CONFIG[store.phase].next && (
+      {isActiveDebate && PHASE_CONFIG[store.phase].next && isMySpeakingTurn && !store.readyCheck && (
         <div className="flex justify-center py-1.5 bg-gray-900/50">
           <button
-            onClick={() => {
-              const currentConfig = PHASE_CONFIG[store.phase];
-              const nextPhase = currentConfig.next;
-              if (!nextPhase) return;
-              store.setPhase(nextPhase);
-              const ws = wsRef.current;
-              if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "phase_advance", phase: nextPhase }));
-              }
-            }}
+            onClick={handleSkip}
             className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg hover:bg-white transition-colors backdrop-blur-sm"
           >
             <SkipForward className="h-4 w-4" />

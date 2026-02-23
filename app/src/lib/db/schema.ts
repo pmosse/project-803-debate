@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 // Enums
-export const userRoleEnum = pgEnum("user_role", ["student", "instructor"]);
+export const userRoleEnum = pgEnum("user_role", ["student", "professor", "super_admin"]);
 export const memoStatusEnum = pgEnum("memo_status", [
   "uploaded",
   "extracting",
@@ -52,18 +52,44 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Classes
+export const classes = pgTable("classes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  code: text("code").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Class Memberships
+export const classMemberships = pgTable("class_memberships", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  classId: uuid("class_id")
+    .references(() => classes.id)
+    .notNull(),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+});
+
 // Assignments
 export const assignments = pgTable("assignments", {
   id: uuid("id").defaultRandom().primaryKey(),
   title: text("title").notNull(),
   promptText: text("prompt_text").notNull(),
   rubricText: text("rubric_text"),
+  rubricCriteria: jsonb("rubric_criteria").$type<
+    { name: string; description: string; maxPoints: number }[]
+  >(),
   readingLinks: jsonb("reading_links").$type<
     { title: string; url: string }[]
   >(),
   memoDeadline: timestamp("memo_deadline"),
   debateDeadline: timestamp("debate_deadline"),
   courseCode: text("course_code").notNull(),
+  emailDomain: text("email_domain"),
+  accessCode: text("access_code"),
   createdBy: uuid("created_by")
     .references(() => users.id)
     .notNull(),
@@ -161,6 +187,9 @@ export const evaluations = pgTable("evaluations", {
   readingAccuracy: numeric("reading_accuracy"),
   evidenceUse: numeric("evidence_use"),
   integrityFlags: jsonb("integrity_flags").$type<string[]>(),
+  criteriaScores: jsonb("criteria_scores").$type<
+    { criterion: string; score: number; maxPoints: number; reasoning: string }[]
+  >(),
   aiSummary: text("ai_summary"),
   passFail: passfailEnum("pass_fail"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -188,6 +217,52 @@ export const readingChunks = pgTable(
   ]
 );
 
+// Assignment Enrollments (student signup)
+export const assignmentEnrollments = pgTable("assignment_enrollments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  assignmentId: uuid("assignment_id")
+    .references(() => assignments.id)
+    .notNull(),
+  studentId: uuid("student_id")
+    .references(() => users.id)
+    .notNull(),
+  enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
+});
+
+// Email Verifications (signup flow)
+export const emailVerifications = pgTable("email_verifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull(),
+  code: text("code").notNull(),
+  assignmentId: uuid("assignment_id")
+    .references(() => assignments.id)
+    .notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  verified: integer("verified").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// AI Usage tracking
+export const aiUsageServiceEnum = pgEnum("ai_usage_service", [
+  "claude",
+  "deepgram",
+]);
+
+export const aiUsage = pgTable("ai_usage", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  assignmentId: uuid("assignment_id").references(() => assignments.id),
+  pairingId: uuid("pairing_id").references(() => pairings.id),
+  memoId: uuid("memo_id").references(() => memos.id),
+  service: aiUsageServiceEnum("service").notNull(),
+  model: text("model"),
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  durationSeconds: numeric("duration_seconds"),
+  estimatedCost: numeric("estimated_cost"),
+  callType: text("call_type").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -200,3 +275,9 @@ export type NewPairing = typeof pairings.$inferInsert;
 export type DebateSession = typeof debateSessions.$inferSelect;
 export type Evaluation = typeof evaluations.$inferSelect;
 export type ReadingChunk = typeof readingChunks.$inferSelect;
+export type AssignmentEnrollment = typeof assignmentEnrollments.$inferSelect;
+export type EmailVerification = typeof emailVerifications.$inferSelect;
+export type AiUsage = typeof aiUsage.$inferSelect;
+export type Class = typeof classes.$inferSelect;
+export type NewClass = typeof classes.$inferInsert;
+export type ClassMembership = typeof classMemberships.$inferSelect;

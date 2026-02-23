@@ -3,13 +3,14 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { pairings, debateSessions, evaluations } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { isPrivilegedRole } from "@/lib/auth/roles";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ pairingId: string }> }
 ) {
   const session = await auth();
-  if (!session || (session.user as any).role !== "instructor") {
+  if (!session || !isPrivilegedRole((session.user as any).role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

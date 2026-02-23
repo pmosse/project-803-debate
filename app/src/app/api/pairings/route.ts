@@ -5,6 +5,8 @@ import { pairings, memos, users } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { createRoom } from "@/lib/daily/client";
 import Anthropic from "@anthropic-ai/sdk";
+import { logUsage } from "@/lib/usage-logger";
+import { isPrivilegedRole } from "@/lib/auth/roles";
 
 interface MemoForPairing {
   studentId: string;
@@ -72,6 +74,14 @@ Respond with valid JSON only, no markdown:
     ],
   });
 
+  logUsage({
+    service: "claude",
+    model: response.model,
+    callType: "pairing",
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  });
+
   let text =
     response.content[0].type === "text" ? response.content[0].text : "";
   // Strip markdown code fences if Claude wraps the JSON
@@ -82,7 +92,7 @@ Respond with valid JSON only, no markdown:
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session || (session.user as any).role !== "instructor") {
+  if (!session || !isPrivilegedRole((session.user as any).role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

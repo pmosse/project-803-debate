@@ -1,7 +1,11 @@
 import os
+import sys
 import json
 from anthropic import Anthropic
 import httpx
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from shared.usage_logger import log_usage
 
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
@@ -145,6 +149,15 @@ class Moderator:
                 messages=[{"role": "user", "content": prompt}],
             )
 
+            log_usage(
+                service="claude",
+                model=response.model,
+                call_type="moderation",
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                assignment_id=self.assignment_id,
+            )
+
             text = response.content[0].text.strip()
             if text.startswith("```"):
                 lines = text.split("\n")
@@ -173,10 +186,65 @@ class Moderator:
                 max_tokens=100,
                 messages=[{"role": "user", "content": prompt}],
             )
+            log_usage(
+                service="claude",
+                model=response.model,
+                call_type="phase_prompt",
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                assignment_id=self.assignment_id,
+            )
             return response.content[0].text.strip()
         except Exception as e:
             print(f"Phase prompt error: {e}")
             return None
+
+    async def generate_ready_check_message(self, current_phase: str, next_phase: str) -> str | None:
+        """Generate a transition message between phases."""
+        first_a = self.student_a_name.split(" ")[0]
+        first_b = self.student_b_name.split(" ")[0]
+
+        # Determine who was speaking and who is next
+        current_speaker = first_a if current_phase.endswith("_a") else first_b
+        next_speaker = first_a if next_phase.endswith("_a") else first_b
+
+        # Friendly phase name
+        phase_names = {
+            "opening": "opening statement",
+            "crossexam": "cross-examination",
+            "rebuttal": "rebuttal",
+            "closing": "closing statement",
+        }
+        next_phase_base = next_phase.rsplit("_", 1)[0]
+        next_phase_name = phase_names.get(next_phase_base, next_phase_base)
+
+        prompt = (
+            f"You are an AI debate moderator transitioning between phases. "
+            f"{current_speaker} just finished. {next_speaker} is up next for {next_phase_name}. "
+            f"Generate a brief transition message (~30 words) that thanks the previous speaker and "
+            f"announces the next phase. Be encouraging and professional. "
+            f"Use their first names. Return ONLY the text, no quotes."
+        )
+
+        try:
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=80,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            log_usage(
+                service="claude",
+                model=response.model,
+                call_type="ready_check",
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                assignment_id=self.assignment_id,
+            )
+            return response.content[0].text.strip()
+        except Exception as e:
+            print(f"Ready check message error: {e}")
+            # Fallback template
+            return f"{current_speaker}, thanks for your contribution. {next_speaker}, you're up for {next_phase_name}. Press Ready when you're set."
 
     async def generate_silence_nudge(self, phase: str, speaker: str) -> str | None:
         """Generate a nudge for a silent speaker."""
@@ -198,6 +266,14 @@ class Moderator:
                 model="claude-haiku-4-5-20251001",
                 max_tokens=60,
                 messages=[{"role": "user", "content": prompt}],
+            )
+            log_usage(
+                service="claude",
+                model=response.model,
+                call_type="silence_nudge",
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                assignment_id=self.assignment_id,
             )
             return response.content[0].text.strip()
         except Exception as e:

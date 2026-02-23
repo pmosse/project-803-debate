@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { generateImpersonateToken } from "@/lib/auth/config";
+import { isPrivilegedRole } from "@/lib/auth/roles";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session || (session.user as any).role !== "instructor") {
+  if (!session || !isPrivilegedRole((session.user as any).role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

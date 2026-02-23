@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { ArrowRight, Loader2 } from "lucide-react";
 import Image from "next/image";
 
+function getRedirectForRole(role: string | undefined): string {
+  if (role === "super_admin") return "/admin/dashboard";
+  if (role === "professor") return "/professor/dashboard";
+  return "/dashboard";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -30,11 +36,22 @@ export default function LoginPage() {
     if (result?.error) {
       setError("Invalid email or password.");
     } else {
-      // Check role from session to redirect appropriately
       const res = await fetch("/api/auth/session");
       const session = await res.json();
-      const role = session?.user?.role;
-      router.push(role === "instructor" ? "/instructor/dashboard" : "/dashboard");
+      router.push(getRedirectForRole(session?.user?.role));
+    }
+  }
+
+  async function quickLogin(email: string, password: string, redirectTo: string) {
+    setLoading(true);
+    const result = await signIn("unified-login", {
+      email,
+      password,
+      redirect: false,
+    });
+    setLoading(false);
+    if (!result?.error) {
+      router.push(redirectTo);
     }
   }
 
@@ -134,24 +151,20 @@ export default function LoginPage() {
           </form>
 
           {/* Quick login for testing */}
-          <div className="mt-6 border-t pt-4">
+          <div className="mt-6 border-t pt-4 space-y-2">
             <button
-              onClick={async () => {
-                setLoading(true);
-                const result = await signIn("unified-login", {
-                  email: "smith@columbia.edu",
-                  password: "instructor123",
-                  redirect: false,
-                });
-                setLoading(false);
-                if (!result?.error) {
-                  router.push("/instructor/dashboard");
-                }
-              }}
+              onClick={() => quickLogin("smith@columbia.edu", "instructor123", "/professor/dashboard")}
               disabled={loading}
               className="w-full rounded-md border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
             >
-              Quick Login as Instructor (testing)
+              Quick Login as Professor (testing)
+            </button>
+            <button
+              onClick={() => quickLogin("admin@columbia.edu", "admin123", "/admin/dashboard")}
+              disabled={loading}
+              className="w-full rounded-md border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
+            >
+              Quick Login as Admin (testing)
             </button>
           </div>
         </div>

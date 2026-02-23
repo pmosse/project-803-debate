@@ -45,6 +45,9 @@ export const PHASE_CONFIG: Record<
   completed: { label: "Debate Complete", duration: 0, next: null },
 };
 
+// Phases that skip ready check (first phase and last transition)
+const SKIP_READY_CHECK: Set<string> = new Set(["consent", "closing_b"]);
+
 const GRACE_PERIOD = 10; // seconds
 
 interface DebateStore {
@@ -61,6 +64,13 @@ interface DebateStore {
   studentRole: "A" | "B" | null;
   showPhaseOverlay: boolean;
 
+  // Ready check state
+  readyCheck: boolean;
+  readyCheckMessage: string;
+  readyCheckNextPhase: DebatePhase | null;
+  readyA: boolean;
+  readyB: boolean;
+
   setSession: (sessionId: string, pairingId: string) => void;
   setPhase: (phase: DebatePhase) => void;
   syncPhase: (phase: DebatePhase, elapsed: number) => void;
@@ -73,6 +83,11 @@ interface DebateStore {
   setConsent: (student: "A" | "B", value: boolean) => void;
   setStudentRole: (role: "A" | "B") => void;
   setShowPhaseOverlay: (show: boolean) => void;
+
+  // Ready check methods
+  startReadyCheck: (message: string, nextPhase: DebatePhase) => void;
+  updateReadyState: (readyA: boolean, readyB: boolean) => void;
+  clearReadyCheck: () => void;
 }
 
 export const useDebateStore = create<DebateStore>((set, get) => ({
@@ -89,6 +104,13 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   studentRole: null,
   showPhaseOverlay: false,
 
+  // Ready check state
+  readyCheck: false,
+  readyCheckMessage: "",
+  readyCheckNextPhase: null,
+  readyA: false,
+  readyB: false,
+
   setSession: (sessionId, pairingId) => set({ sessionId, pairingId }),
 
   setPhase: (phase) => {
@@ -98,6 +120,12 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
       timeRemaining: config.duration,
       isGracePeriod: false,
       showPhaseOverlay: phase !== "waiting" && phase !== "consent" && phase !== "completed",
+      // Clear ready check state on phase change
+      readyCheck: false,
+      readyCheckMessage: "",
+      readyCheckNextPhase: null,
+      readyA: false,
+      readyB: false,
     });
     if (phase !== "waiting" && phase !== "consent" && phase !== "completed") {
       setTimeout(() => set({ showPhaseOverlay: false }), 3000);
@@ -124,8 +152,10 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   },
 
   tick: () => {
-    const { timeRemaining, isGracePeriod, phase } = get();
+    const { timeRemaining, isGracePeriod, phase, readyCheck } = get();
     if (phase === "waiting" || phase === "consent" || phase === "completed") return;
+    // Pause timer during ready check
+    if (readyCheck) return;
 
     if (timeRemaining > 1) {
       set({ timeRemaining: timeRemaining - 1 });
@@ -134,8 +164,21 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
     } else if (!isGracePeriod) {
       set({ isGracePeriod: true, timeRemaining: GRACE_PERIOD });
     } else {
-      // Grace period expired, advance
-      get().advancePhase();
+      // Grace period expired — trigger ready check instead of immediate advance
+      const config = PHASE_CONFIG[phase];
+      if (config.next && !SKIP_READY_CHECK.has(phase)) {
+        // Don't advance yet; the WS handler will initiate the ready check
+        // Set a flag so the debate-session component knows to send ready_check_start
+        set({
+          readyCheck: true,
+          readyCheckNextPhase: config.next,
+          readyCheckMessage: "",
+          readyA: false,
+          readyB: false,
+        });
+      } else {
+        get().advancePhase();
+      }
     }
   },
 
@@ -170,4 +213,26 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   setStudentRole: (role) => set({ studentRole: role }),
 
   setShowPhaseOverlay: (show) => set({ showPhaseOverlay: show }),
+
+  // Ready check methods
+  startReadyCheck: (message, nextPhase) =>
+    set({
+      readyCheck: true,
+      readyCheckMessage: message,
+      readyCheckNextPhase: nextPhase,
+      readyA: false,
+      readyB: false,
+    }),
+
+  updateReadyState: (readyA, readyB) =>
+    set({ readyA, readyB }),
+
+  clearReadyCheck: () =>
+    set({
+      readyCheck: false,
+      readyCheckMessage: "",
+      readyCheckNextPhase: null,
+      readyA: false,
+      readyB: false,
+    }),
 }));

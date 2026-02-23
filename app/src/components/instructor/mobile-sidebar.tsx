@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X, LayoutDashboard, Users, PlusCircle, Mic, LogOut } from "lucide-react";
+import { Menu, X, LayoutDashboard, Users, PlusCircle, Mic, DollarSign, LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 export function MobileSidebar({ userName }: { userName: string }) {
@@ -39,7 +39,7 @@ export function MobileSidebar({ userName }: { userName: string }) {
 
             <nav className="flex flex-col gap-1">
               <Link
-                href="/instructor/dashboard"
+                href="/professor/dashboard"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white"
               >
@@ -47,7 +47,7 @@ export function MobileSidebar({ userName }: { userName: string }) {
                 Dashboard
               </Link>
               <Link
-                href="/instructor/students"
+                href="/professor/students"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white"
               >
@@ -55,7 +55,7 @@ export function MobileSidebar({ userName }: { userName: string }) {
                 Students
               </Link>
               <Link
-                href="/instructor/assignments/new"
+                href="/professor/assignments/new"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white"
               >
@@ -63,7 +63,15 @@ export function MobileSidebar({ userName }: { userName: string }) {
                 New Assignment
               </Link>
               <Link
-                href="/instructor/av-test"
+                href="/professor/costs"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <DollarSign className="h-4 w-4" />
+                Costs
+              </Link>
+              <Link
+                href="/professor/av-test"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white"
               >

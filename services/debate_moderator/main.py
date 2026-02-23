@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import time
 import asyncio
@@ -9,6 +10,8 @@ import psycopg2
 # Load .env BEFORE importing modules that read env vars at module level
 load_dotenv()
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from shared.usage_logger import log_usage
 from moderator import Moderator
 
 app = FastAPI(title="Debate Moderator", version="1.0.0")
@@ -143,6 +146,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             "last_speech_time": time.time(),
             "silence_nudge_sent": False,
             "silence_task": None,
+            "session_start_time": time.time(),
+            "assignment_id": context["assignment_id"],
         }
 
         async def silence_monitor():
@@ -257,6 +262,108 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             "message": phase_text,
                         })
 
+            elif data["type"] == "ready_check_start":
+                current_phase = data.get("current_phase", session["current_phase"])
+                next_phase = data.get("next_phase")
+                if not next_phase:
+                    continue
+
+                # Generate AI transition message
+                message = await session["moderator"].generate_ready_check_message(
+                    current_phase, next_phase
+                )
+
+                # Store ready state
+                session["ready_state"] = {"A": False, "B": False}
+                session["ready_next_phase"] = next_phase
+
+                # Broadcast ready check to all clients
+                await broadcast(session_id, {
+                    "type": "ready_check",
+                    "message": message or "",
+                    "next_phase": next_phase,
+                    "ready_a": False,
+                    "ready_b": False,
+                })
+
+                # Start timeout task (60s auto-advance)
+                async def ready_timeout():
+                    await asyncio.sleep(60)
+                    s = sessions.get(session_id)
+                    if s and s.get("ready_state"):
+                        np = s.get("ready_next_phase")
+                        if np:
+                            s["current_phase"] = np
+                            s["phase_started_at"] = time.time()
+                            s["last_speech_time"] = time.time()
+                            s["silence_nudge_sent"] = False
+                            s.pop("ready_state", None)
+                            s.pop("ready_next_phase", None)
+                            await broadcast(session_id, {
+                                "type": "phase_advance",
+                                "phase": np,
+                            })
+                            # Generate phase prompt for new phase
+                            phase_text = await s["moderator"].generate_phase_prompt(np)
+                            if phase_text:
+                                await broadcast(session_id, {
+                                    "type": "intervention",
+                                    "intervention_type": "phase_prompt",
+                                    "target_student": "both",
+                                    "message": phase_text,
+                                })
+
+                if session.get("ready_timeout_task"):
+                    session["ready_timeout_task"].cancel()
+                session["ready_timeout_task"] = asyncio.create_task(ready_timeout())
+
+            elif data["type"] == "ready_signal":
+                student = data.get("student")  # "A" or "B"
+                if not student or "ready_state" not in session:
+                    continue
+
+                session["ready_state"][student] = True
+                ready_a = session["ready_state"].get("A", False)
+                ready_b = session["ready_state"].get("B", False)
+
+                # Broadcast updated ready state
+                await broadcast(session_id, {
+                    "type": "ready_update",
+                    "ready_a": ready_a,
+                    "ready_b": ready_b,
+                })
+
+                # Both ready — advance phase
+                if ready_a and ready_b:
+                    if session.get("ready_timeout_task"):
+                        session["ready_timeout_task"].cancel()
+                    next_phase = session.get("ready_next_phase")
+                    session.pop("ready_state", None)
+                    session.pop("ready_next_phase", None)
+                    session.pop("ready_timeout_task", None)
+
+                    if next_phase:
+                        session["current_phase"] = next_phase
+                        session["phase_started_at"] = time.time()
+                        session["last_speech_time"] = time.time()
+                        session["silence_nudge_sent"] = False
+
+                        await broadcast(session_id, {
+                            "type": "phase_advance",
+                            "phase": next_phase,
+                        })
+
+                        # Generate phase prompt for new phase
+                        if next_phase not in ("waiting", "consent", "completed"):
+                            phase_text = await session["moderator"].generate_phase_prompt(next_phase)
+                            if phase_text:
+                                await broadcast(session_id, {
+                                    "type": "intervention",
+                                    "intervention_type": "phase_prompt",
+                                    "target_student": "both",
+                                    "message": phase_text,
+                                })
+
             elif data["type"] == "phase_advance":
                 # Update server-side phase tracking
                 new_phase = data.get("phase", session["current_phase"])
@@ -281,6 +388,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             save_transcript(session_id, session["transcript"])
             if session.get("silence_task"):
                 session["silence_task"].cancel()
+            if session.get("ready_timeout_task"):
+                session["ready_timeout_task"].cancel()
+            # Log Deepgram transcription usage
+            duration = time.time() - session.get("session_start_time", time.time())
+            if duration > 10:  # Only log if session lasted more than 10s
+                log_usage(
+                    service="deepgram",
+                    model="deepgram",
+                    call_type="transcription",
+                    duration_seconds=duration,
+                    assignment_id=session.get("assignment_id"),
+                )
             del sessions[session_id]
 
 

@@ -22,7 +22,7 @@ export function AvTestClient() {
   async function handleStart() {
     setStarting(true);
     try {
-      const res = await fetch("/api/instructor/test-room", { method: "POST" });
+      const res = await fetch("/api/professor/test-room", { method: "POST" });
       if (!res.ok) throw new Error("Failed to create room");
       const data = await res.json();
       setRoom(data);
@@ -36,7 +36,7 @@ export function AvTestClient() {
 
   function handleEnd() {
     if (room) {
-      fetch("/api/instructor/test-room", {
+      fetch("/api/professor/test-room", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomName: room.roomName }),
@@ -218,7 +218,7 @@ function AvTestInner({
 
             setSummarizing(true);
             setSummaryError(null);
-            fetch("/api/instructor/test-room/summarize", {
+            fetch("/api/professor/test-room/summarize", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ transcript: text }),
