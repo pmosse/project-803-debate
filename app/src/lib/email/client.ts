@@ -76,6 +76,27 @@ export async function sendVerificationCode({
   });
 }
 
+export async function sendLoginCode({
+  to,
+  code,
+}: {
+  to: string;
+  code: string;
+}) {
+  return getResend().emails.send({
+    from: fromEmail,
+    to,
+    subject: `Your login code: ${code}`,
+    html: `
+      <p>Hi,</p>
+      <p>Your login code for <strong>Project 803</strong> is:</p>
+      <p style="font-size: 32px; font-weight: bold; letter-spacing: 4px; margin: 20px 0;">${code}</p>
+      <p>This code expires in 15 minutes.</p>
+      <p>If you didn't request this, you can ignore this email.</p>
+    `,
+  });
+}
+
 export async function sendDebateReminder({
   to,
   studentName,

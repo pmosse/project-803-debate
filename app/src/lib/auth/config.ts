@@ -1,8 +1,8 @@
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { users, loginCodes } from "@/lib/db/schema";
+import { eq, and, gte } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -35,6 +35,57 @@ export const authConfig: NextAuthConfig = {
 
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          courseCode: user.courseCode,
+        };
+      },
+    }),
+    Credentials({
+      id: "email-code",
+      name: "Email Code",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        code: { label: "Code", type: "text" },
+      },
+      async authorize(credentials) {
+        const email = (credentials?.email as string)?.toLowerCase().trim();
+        const code = credentials?.code as string;
+        if (!email || !code) return null;
+
+        const now = new Date();
+        const [loginCode] = await db
+          .select()
+          .from(loginCodes)
+          .where(
+            and(
+              eq(loginCodes.email, email),
+              eq(loginCodes.code, code),
+              eq(loginCodes.used, 0),
+              gte(loginCodes.expiresAt, now)
+            )
+          )
+          .limit(1);
+
+        if (!loginCode) return null;
+
+        // Mark code as used
+        await db
+          .update(loginCodes)
+          .set({ used: 1 })
+          .where(eq(loginCodes.id, loginCode.id));
+
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, email))
+          .limit(1);
+
+        if (!user) return null;
 
         return {
           id: user.id,
@@ -101,5 +152,6 @@ export const authConfig: NextAuthConfig = {
   },
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
 };

@@ -244,6 +244,16 @@ export const emailVerifications = pgTable("email_verifications", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Login Codes (passwordless email login)
+export const loginCodes = pgTable("login_codes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull(),
+  code: text("code").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: integer("used").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // AI Usage tracking
 export const aiUsageServiceEnum = pgEnum("ai_usage_service", [
   "claude",

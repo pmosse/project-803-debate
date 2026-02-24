@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Mail, KeyRound } from "lucide-react";
 import Image from "next/image";
+
+type LoginMode = "code-email" | "code-verify" | "password";
 
 function getRedirectForRole(role: string | undefined): string {
   if (role === "super_admin") return "/admin/dashboard";
@@ -19,8 +21,10 @@ export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<LoginMode>("code-email");
+  const [codeEmail, setCodeEmail] = useState("");
 
-  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+  async function handlePasswordLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -35,6 +39,57 @@ export default function LoginPage() {
     setLoading(false);
     if (result?.error) {
       setError("Invalid email or password.");
+    } else {
+      const res = await fetch("/api/auth/session");
+      const session = await res.json();
+      router.push(getRedirectForRole(session?.user?.role));
+    }
+  }
+
+  async function handleRequestCode(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const form = new FormData(e.currentTarget);
+    const email = form.get("email") as string;
+
+    try {
+      const res = await fetch("/api/auth/login-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "Failed to send code");
+      }
+
+      setCodeEmail(email);
+      setMode("code-verify");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerifyCode(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const form = new FormData(e.currentTarget);
+    const code = form.get("code") as string;
+
+    const result = await signIn("email-code", {
+      email: codeEmail,
+      code,
+      redirect: false,
+    });
+
+    setLoading(false);
+    if (result?.error) {
+      setError("Invalid or expired code. Please try again.");
     } else {
       const res = await fetch("/api/auth/session");
       const session = await res.json();
@@ -108,47 +163,153 @@ export default function LoginPage() {
             Sign in to your account to continue
           </p>
 
-          <form onSubmit={handleLogin} className="mt-8 space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="you@columbia.edu"
-                required
-                autoFocus
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Enter your password"
-                required
-              />
-            </div>
-
-            {error && (
-              <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
-                {error}
+          {/* Email code: enter email */}
+          {mode === "code-email" && (
+            <form onSubmit={handleRequestCode} className="mt-8 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="you@columbia.edu"
+                  required
+                  autoFocus
+                />
               </div>
-            )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  Sign In
-                  <ArrowRight className="h-4 w-4" />
-                </>
+              {error && (
+                <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {error}
+                </div>
               )}
-            </Button>
-          </form>
+
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4" />
+                    Send Login Code
+                  </>
+                )}
+              </Button>
+
+              <button
+                type="button"
+                onClick={() => { setMode("password"); setError(""); }}
+                className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
+              >
+                <span className="inline-flex items-center gap-1">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Sign in with password instead
+                </span>
+              </button>
+            </form>
+          )}
+
+          {/* Email code: enter code */}
+          {mode === "code-verify" && (
+            <form onSubmit={handleVerifyCode} className="mt-8 space-y-4">
+              <p className="text-sm text-gray-500">
+                We sent a 6-digit code to <strong>{codeEmail}</strong>
+              </p>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="code">Code</Label>
+                <Input
+                  id="code"
+                  name="code"
+                  placeholder="123456"
+                  maxLength={6}
+                  className="text-center text-2xl tracking-[0.3em]"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              {error && (
+                <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+
+              <button
+                type="button"
+                onClick={() => { setMode("code-email"); setError(""); }}
+                className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
+              >
+                Back
+              </button>
+            </form>
+          )}
+
+          {/* Password login */}
+          {mode === "password" && (
+            <form onSubmit={handlePasswordLogin} className="mt-8 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="you@columbia.edu"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+
+              <button
+                type="button"
+                onClick={() => { setMode("code-email"); setError(""); }}
+                className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
+              >
+                <span className="inline-flex items-center gap-1">
+                  <Mail className="h-3.5 w-3.5" />
+                  Sign in with email code instead
+                </span>
+              </button>
+            </form>
+          )}
 
           {/* Quick login for testing */}
           <div className="mt-6 border-t pt-4 space-y-2">
