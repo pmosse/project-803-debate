@@ -10,7 +10,7 @@ import { PhaseOverlay } from "./phase-overlay";
 import { DebateDebrief } from "./debate-debrief";
 import { DailyCall } from "./daily-call";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward, Clock } from "lucide-react";
 import type { DebatePhase } from "@/lib/hooks/use-debate-store";
 import { Check, Bot, WifiOff, Loader2 } from "lucide-react";
 
@@ -377,6 +377,8 @@ export function DebateSession({
         }
       } else if (data.type === "ready_update") {
         store.updateReadyState(data.ready_a, data.ready_b);
+      } else if (data.type === "add_time") {
+        store.addTime(data.seconds || 60);
       }
     };
 
@@ -486,6 +488,16 @@ export function DebateSession({
       store.updateReadyState(store.readyA, true);
     }
   }, [store, studentRole]);
+
+  const handleAddTime = useCallback(() => {
+    // Add 60 seconds locally
+    store.addTime(60);
+    // Broadcast to other client via WebSocket
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "add_time", seconds: 60 }));
+    }
+  }, [store]);
 
   const handleSkip = useCallback(() => {
     const currentConfig = PHASE_CONFIG[store.phase];
@@ -632,16 +644,25 @@ export function DebateSession({
         />
       )}
 
-      {/* Floating skip button — visible when it's the active speaker's turn */}
-      {isActiveDebate && PHASE_CONFIG[store.phase].next && isMySpeakingTurn && !store.readyCheck && (
-        <div className="flex justify-center py-1.5 bg-gray-900/50">
+      {/* Floating action buttons — visible during active timed phases */}
+      {isActiveDebate && PHASE_CONFIG[store.phase].duration > 0 && !store.readyCheck && (
+        <div className="flex justify-center gap-3 py-1.5 bg-gray-900/50">
           <button
-            onClick={handleSkip}
+            onClick={handleAddTime}
             className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg hover:bg-white transition-colors backdrop-blur-sm"
           >
-            <SkipForward className="h-4 w-4" />
-            Skip to next phase
+            <Clock className="h-4 w-4" />
+            +1 min
           </button>
+          {PHASE_CONFIG[store.phase].next && isMySpeakingTurn && (
+            <button
+              onClick={handleSkip}
+              className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg hover:bg-white transition-colors backdrop-blur-sm"
+            >
+              <SkipForward className="h-4 w-4" />
+              Skip to next phase
+            </button>
+          )}
         </div>
       )}
 

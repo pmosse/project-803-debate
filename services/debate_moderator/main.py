@@ -364,6 +364,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                     "message": phase_text,
                                 })
 
+            elif data["type"] == "add_time":
+                seconds = data.get("seconds", 60)
+                # Broadcast to all clients so timers stay in sync
+                await broadcast(session_id, {
+                    "type": "add_time",
+                    "seconds": seconds,
+                }, exclude=websocket)
+
             elif data["type"] == "phase_advance":
                 # Update server-side phase tracking
                 new_phase = data.get("phase", session["current_phase"])

@@ -84,6 +84,9 @@ interface DebateStore {
   setStudentRole: (role: "A" | "B") => void;
   setShowPhaseOverlay: (show: boolean) => void;
 
+  // Time extension
+  addTime: (seconds: number) => void;
+
   // Ready check methods
   startReadyCheck: (message: string, nextPhase: DebatePhase) => void;
   updateReadyState: (readyA: boolean, readyB: boolean) => void;
@@ -213,6 +216,18 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   setStudentRole: (role) => set({ studentRole: role }),
 
   setShowPhaseOverlay: (show) => set({ showPhaseOverlay: show }),
+
+  // Time extension
+  addTime: (seconds) => {
+    const { phase, timeRemaining, isGracePeriod } = get();
+    if (phase === "waiting" || phase === "consent" || phase === "completed") return;
+    if (isGracePeriod) {
+      // Cancel grace period and restore with the added time
+      set({ timeRemaining: seconds, isGracePeriod: false });
+    } else {
+      set({ timeRemaining: timeRemaining + seconds });
+    }
+  },
 
   // Ready check methods
   startReadyCheck: (message, nextPhase) =>
