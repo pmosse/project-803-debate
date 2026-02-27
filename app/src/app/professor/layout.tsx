@@ -25,7 +25,7 @@ export default async function ProfessorLayout({
   return (
     <div className="flex min-h-screen">
       {/* Desktop sidebar */}
-      <aside className="relative hidden w-64 bg-[#0F2B4C] text-white md:block">
+      <aside className="sticky top-0 hidden h-screen w-64 bg-[#0F2B4C] text-white md:block">
         <Link href="/professor/dashboard" className="flex h-16 items-center gap-2.5 border-b border-white/10 px-6 hover:bg-white/5 transition-colors">
           <Image src="/icon.svg" alt="" width={28} height={28} className="rounded-md" />
           <span className="text-lg font-semibold">Project 803</span>

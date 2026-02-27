@@ -268,9 +268,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 if not next_phase:
                     continue
 
-                # Generate AI transition message
-                message = await session["moderator"].generate_ready_check_message(
-                    current_phase, next_phase
+                # Filter transcript for the completed phase
+                phase_transcript = [
+                    t for t in session["transcript"]
+                    if t.get("phase") == current_phase
+                ]
+
+                # Generate AI phase summary and transition message in parallel
+                summary, message = await asyncio.gather(
+                    session["moderator"].generate_phase_summary(phase_transcript),
+                    session["moderator"].generate_ready_check_message(
+                        current_phase, next_phase
+                    ),
                 )
 
                 # Store ready state
@@ -281,6 +290,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 await broadcast(session_id, {
                     "type": "ready_check",
                     "message": message or "",
+                    "summary": summary or "",
                     "next_phase": next_phase,
                     "ready_a": False,
                     "ready_b": False,

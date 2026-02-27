@@ -16,7 +16,7 @@ export default async function AdminLayout({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="relative hidden w-64 bg-[#1a1a2e] text-white md:block">
+      <aside className="sticky top-0 hidden h-screen w-64 bg-[#1a1a2e] text-white md:block">
         <Link
           href="/admin/dashboard"
           className="flex h-16 items-center gap-2.5 border-b border-white/10 px-6 hover:bg-white/5 transition-colors"

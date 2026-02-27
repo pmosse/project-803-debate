@@ -157,6 +157,7 @@ function PhaseTimeline({
 
 function ReadyCheckOverlay({
   message,
+  summary,
   readyA,
   readyB,
   studentRole,
@@ -165,6 +166,7 @@ function ReadyCheckOverlay({
   onReady,
 }: {
   message: string;
+  summary: string;
   readyA: boolean;
   readyB: boolean;
   studentRole: "A" | "B";
@@ -176,6 +178,7 @@ function ReadyCheckOverlay({
   const theirReady = studentRole === "A" ? readyB : readyA;
   const myFirst = studentName.split(" ")[0];
   const theirFirst = opponentName.split(" ")[0];
+  const isLoading = !message;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -185,8 +188,20 @@ function ReadyCheckOverlay({
           <h3 className="text-lg font-semibold text-gray-900">Phase Transition</h3>
         </div>
 
-        {message && (
-          <p className="mb-5 text-sm text-gray-600 leading-relaxed">{message}</p>
+        {isLoading ? (
+          <div className="mb-5 flex items-center gap-2 text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Generating phase summary...
+          </div>
+        ) : (
+          <>
+            {summary && (
+              <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 p-3">
+                <p className="text-sm text-blue-800 leading-relaxed">{summary}</p>
+              </div>
+            )}
+            <p className="mb-5 text-sm text-gray-600 leading-relaxed">{message}</p>
+          </>
         )}
 
         <div className="mb-5 flex gap-3">
@@ -218,11 +233,11 @@ function ReadyCheckOverlay({
 
         <Button
           onClick={onReady}
-          disabled={myReady}
+          disabled={myReady || isLoading}
           className="w-full"
           size="lg"
         >
-          {myReady ? "Waiting for opponent..." : "I'm Ready"}
+          {myReady ? "Waiting for opponent..." : isLoading ? "Loading..." : "I'm Ready"}
         </Button>
       </div>
     </div>
@@ -369,9 +384,9 @@ export function DebateSession({
           store.syncPhase(phase, data.elapsed || 0);
         }
       } else if (data.type === "ready_check") {
-        // Server sends ready check with AI transition message
+        // Server sends ready check with AI transition message + summary
         const nextPhase = data.next_phase as DebatePhase;
-        store.startReadyCheck(data.message || "", nextPhase);
+        store.startReadyCheck(data.message || "", nextPhase, data.summary || "");
         if (data.message) {
           speakMessage(data.message);
         }
@@ -546,9 +561,10 @@ export function DebateSession({
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       {/* Ready check overlay */}
-      {store.readyCheck && store.readyCheckMessage && (
+      {store.readyCheck && (
         <ReadyCheckOverlay
           message={store.readyCheckMessage}
+          summary={store.readyCheckSummary}
           readyA={store.readyA}
           readyB={store.readyB}
           studentRole={studentRole}

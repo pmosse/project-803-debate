@@ -67,6 +67,7 @@ interface DebateStore {
   // Ready check state
   readyCheck: boolean;
   readyCheckMessage: string;
+  readyCheckSummary: string;
   readyCheckNextPhase: DebatePhase | null;
   readyA: boolean;
   readyB: boolean;
@@ -88,7 +89,7 @@ interface DebateStore {
   addTime: (seconds: number) => void;
 
   // Ready check methods
-  startReadyCheck: (message: string, nextPhase: DebatePhase) => void;
+  startReadyCheck: (message: string, nextPhase: DebatePhase, summary?: string) => void;
   updateReadyState: (readyA: boolean, readyB: boolean) => void;
   clearReadyCheck: () => void;
 }
@@ -110,6 +111,7 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   // Ready check state
   readyCheck: false,
   readyCheckMessage: "",
+  readyCheckSummary: "",
   readyCheckNextPhase: null,
   readyA: false,
   readyB: false,
@@ -126,6 +128,7 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
       // Clear ready check state on phase change
       readyCheck: false,
       readyCheckMessage: "",
+      readyCheckSummary: "",
       readyCheckNextPhase: null,
       readyA: false,
       readyB: false,
@@ -176,6 +179,7 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
           readyCheck: true,
           readyCheckNextPhase: config.next,
           readyCheckMessage: "",
+          readyCheckSummary: "",
           readyA: false,
           readyB: false,
         });
@@ -230,10 +234,11 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   },
 
   // Ready check methods
-  startReadyCheck: (message, nextPhase) =>
+  startReadyCheck: (message, nextPhase, summary) =>
     set({
       readyCheck: true,
       readyCheckMessage: message,
+      readyCheckSummary: summary || "",
       readyCheckNextPhase: nextPhase,
       readyA: false,
       readyB: false,
@@ -246,6 +251,7 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
     set({
       readyCheck: false,
       readyCheckMessage: "",
+      readyCheckSummary: "",
       readyCheckNextPhase: null,
       readyA: false,
       readyB: false,

@@ -246,6 +246,45 @@ class Moderator:
             # Fallback template
             return f"{current_speaker}, thanks for your contribution. {next_speaker}, you're up for {next_phase_name}. Press Ready when you're set."
 
+    async def generate_phase_summary(self, phase_transcript: list[dict]) -> str | None:
+        """Generate a ~50 word summary of what happened during a phase."""
+        if not phase_transcript:
+            return None
+
+        first_a = self.student_a_name.split(" ")[0]
+        first_b = self.student_b_name.split(" ")[0]
+
+        transcript_text = "\n".join(
+            f"{t['speaker']}: {t['text']}" for t in phase_transcript
+        )
+
+        prompt = (
+            f"Summarize this debate phase in ~50 words. Highlight key arguments, "
+            f"questions raised, or important points. Use the students' first names "
+            f"({first_a} and {first_b}). Be concise and specific.\n\n"
+            f"TRANSCRIPT:\n{transcript_text}\n\n"
+            f"Return ONLY the summary text, no quotes."
+        )
+
+        try:
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=120,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            log_usage(
+                service="claude",
+                model=response.model,
+                call_type="phase_summary",
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                assignment_id=self.assignment_id,
+            )
+            return response.content[0].text.strip()
+        except Exception as e:
+            print(f"Phase summary error: {e}")
+            return None
+
     async def generate_silence_nudge(self, phase: str, speaker: str) -> str | None:
         """Generate a nudge for a silent speaker."""
         if speaker == "A":
