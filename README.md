@@ -64,6 +64,7 @@ During the debate:
 - **Fact-checking** against indexed reading passages using RAG
 - **Silence detection** nudges speakers after 15s of inactivity
 - **Phase prompts** provide contextual guidance at each transition
+- **Phase summaries** — AI-generated ~50 word recap shown in the ready check overlay between phases so students can review key arguments before continuing
 
 ### 4. Post-Debate
 - Personalized AI debrief (what went well, what to improve)
@@ -132,8 +133,21 @@ EVALUATOR_URL=http://localhost:8005
 
 | Role | Email | Password |
 |------|-------|----------|
-| Instructor | smith@columbia.edu | instructor123 |
+| Professor | smith@columbia.edu | instructor123 |
+| Admin | admin@columbia.edu | admin123 |
 | Students | (use name + course code) | ECON803 |
+
+## Testing
+
+```bash
+# Run all debate moderator tests (unit + integration with real Claude API)
+cd services/debate_moderator
+python -m pytest test_phase_summary.py test_integration.py -v -s
+```
+
+- **Unit tests** (`test_phase_summary.py`) — Mocked Claude API, tests phase summary generation logic
+- **Integration tests** (`test_integration.py`) — Real Claude API calls over the full WebSocket pipeline: connection/sync, transcript broadcast, AI moderation, phase prompts, phase summaries, ready checks, and phase advancement
+- Requires `ANTHROPIC_API_KEY` in root `.env`; auto-skips if not set
 
 ## Project Structure
 
@@ -144,11 +158,12 @@ debates/
 │       ├── app/                  # App Router pages & API routes
 │       │   ├── (auth)/           # Login
 │       │   ├── (student)/        # Student pages (dashboard, debate, assignment)
-│       │   ├── instructor/       # Instructor pages
+│       │   ├── professor/        # Professor pages
+│       │   ├── admin/            # Super admin pages
 │       │   └── api/              # API routes
 │       ├── components/           # React components
-│       │   ├── debate/           # Debate session, AI bar, timer, debrief
-│       │   ├── instructor/       # Instructor tools
+│       │   ├── debate/           # Debate session, AI coach, timer, debrief
+│       │   ├── instructor/       # Professor/admin tools
 │       │   └── ui/               # shadcn/ui primitives
 │       └── lib/                  # Auth, DB, hooks, utilities
 ├── services/                     # Python microservices

@@ -32,7 +32,7 @@ An AI-moderated oral debate platform for university courses. Professors create d
 | Closing | 30 sec each | Final summary |
 
 - 10-second grace period after each timer expires
-- Ready check between phases (both students confirm before advancing)
+- Ready check between phases: AI summary of the completed phase + transition message, both students confirm before advancing
 - Students can click **+1 min** to extend any phase or **Skip** to move ahead
 - AI moderator intervenes in real-time: prompts for citations, fact-checks, nudges silence
 
@@ -43,6 +43,7 @@ An AI-moderated oral debate platform for university courses. Professors create d
 | Memo analysis | Claude Haiku | memo_processor (8001) |
 | Pairing | Claude Sonnet | Next.js API |
 | Live moderation | Claude Haiku | debate_moderator (8004) |
+| Phase summaries | Claude Haiku | debate_moderator (8004) |
 | Evaluation & scoring | Claude Sonnet | evaluator (8005) |
 | Student debrief | Claude Haiku | Next.js API |
 | Speech-to-text | Deepgram Nova-3 | Daily.co integration |
@@ -106,6 +107,17 @@ ssh -i project803.pem ubuntu@63.179.116.133 "PGPASSWORD=debates psql -h localhos
 ssh -i project803.pem ubuntu@63.179.116.133 "cd ~/debates/app && pnpm db:push"
 ```
 
+## Testing
+
+```bash
+cd services/debate_moderator
+python -m pytest test_phase_summary.py test_integration.py -v -s
+```
+
+- `test_phase_summary.py` — Unit tests (mocked Claude) for `generate_phase_summary()`
+- `test_integration.py` — Integration tests using **real Claude API** over the full WebSocket pipeline (DB/usage logging mocked)
+- Requires `ANTHROPIC_API_KEY` in `.env`; tests auto-skip if not set
+
 ## Local Development
 
 - `cd app && pnpm dev` — Next.js dev server on port 3000
@@ -160,7 +172,8 @@ ssh -i project803.pem ubuntu@63.179.116.133 "cd ~/debates/app && pnpm db:push"
 ### Debate Session
 - Phase changes: only the initiating client sends `phase_command` to backend; receiving client skips via `phaseFromRemoteRef` to prevent duplicate AI messages
 - `add_time` WebSocket message broadcasts to both clients to keep timers in sync
-- Ready check between phases: server generates AI transition message, both students must click "I'm Ready"
+- Ready check between phases: server generates AI phase summary + transition message (in parallel), overlay shows loading state → summary in blue box → "I'm Ready" button (disabled until loaded)
+- Phase summary uses `generate_phase_summary()` — filters transcript by completed phase, sends to Claude Haiku (~50 words)
 
 ### Pairing
 - Claude Sonnet matches by argument divergence, reading overlap, and availability
