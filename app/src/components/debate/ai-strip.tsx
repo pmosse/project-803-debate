@@ -76,14 +76,12 @@ export function AiStrip({
     lastInterventionIdRef.current = latest.timestamp;
     setActiveIntervention(latest);
 
-    // Clear any existing dismiss timer
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     dismissTimerRef.current = setTimeout(() => {
       setActiveIntervention(null);
     }, 10000);
   }, [interventions]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
@@ -94,22 +92,25 @@ export function AiStrip({
     (phase.endsWith("_a") && studentRole === "A") ||
     (phase.endsWith("_b") && studentRole === "B");
 
+  const myFirst = studentName.split(" ")[0];
+  const theirFirst = opponentName.split(" ")[0];
   const instructions = getPhaseInstructions(phase, opponentThesis, opponentClaims);
 
   // Determine what to show
   let message: string;
   let borderClass: string;
   let Icon = Bot;
+  let label: string;
 
   if (activeIntervention) {
-    // Priority 1: Active intervention
     message = activeIntervention.message;
     borderClass = INTERVENTION_BORDER[activeIntervention.type] || "border-l-blue-500";
     Icon = INTERVENTION_ICON[activeIntervention.type] || Bot;
+    label = "AI Moderator";
   } else if (instructions) {
-    // Priority 2/3: Phase instruction based on whose turn it is
     message = isMyTurn ? instructions.you : instructions.opponent;
     borderClass = isMyTurn ? "border-l-[#1D4F91]" : "border-l-gray-400";
+    label = isMyTurn ? `${myFirst}, your turn` : `${theirFirst}'s turn`;
   } else {
     return null;
   }
@@ -120,18 +121,23 @@ export function AiStrip({
 
   return (
     <div
-      className={`flex items-center gap-3 border-l-4 bg-gray-900 px-3 py-2.5 ${borderClass}`}
+      className={`border-l-4 bg-black/70 backdrop-blur-sm px-3 py-2.5 ${borderClass}`}
     >
-      <Icon className="h-4 w-4 shrink-0 text-gray-400" />
-      <p className="min-w-0 flex-1 truncate text-sm text-gray-200">{message}</p>
-      {hasDuration && (
-        <span
-          className={`shrink-0 rounded px-2 py-0.5 font-mono text-xs font-bold text-white ${timerColorClass}`}
-        >
-          {isGracePeriod && "+"}
-          {formatTime(timeRemaining)}
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide flex-1">
+          {label}
         </span>
-      )}
+        {hasDuration && (
+          <span
+            className={`shrink-0 rounded px-2 py-0.5 font-mono text-sm font-bold text-white ${timerColorClass}`}
+          >
+            {isGracePeriod && "+"}
+            {formatTime(timeRemaining)}
+          </span>
+        )}
+      </div>
+      <p className="text-sm leading-snug text-gray-100">{message}</p>
     </div>
   );
 }

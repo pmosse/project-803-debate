@@ -36,7 +36,7 @@ export function DailyCall(props: DailyCallProps) {
   // show a clear error instead of letting DailyProvider crash.
   if (typeof window !== "undefined" && !window.RTCPeerConnection) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-gray-900 p-8">
+      <div className="flex h-full items-center justify-center bg-gray-900 p-8">
         <div className="max-w-md text-center">
           <AlertTriangle className="mx-auto h-10 w-10 text-amber-400" />
           <p className="mt-3 text-sm font-medium text-white">
@@ -256,7 +256,7 @@ function DailyCallInner({
   // Error state
   if (joinError) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-gray-900 p-8">
+      <div className="flex h-full items-center justify-center bg-gray-900 p-8">
         <div className="text-center">
           <AlertTriangle className="mx-auto h-10 w-10 text-amber-400" />
           <p className="mt-3 text-sm text-gray-300">{joinError}</p>
@@ -272,7 +272,7 @@ function DailyCallInner({
   }
 
   return (
-    <div className="relative grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-hidden bg-gray-900 p-2">
+    <div className="relative grid h-full min-h-0 grid-cols-2 gap-2 overflow-hidden bg-gray-900 p-2">
       {/* Transcription error banner */}
       {transcriptionError && (
         <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-amber-500/90 px-3 py-2 text-sm text-white backdrop-blur-sm">

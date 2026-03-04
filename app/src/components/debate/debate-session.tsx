@@ -452,41 +452,45 @@ export function DebateSession({
         />
       )}
 
-      {/* Video area — takes all available space */}
-      {dailyToken && roomUrl ? (
-        <DailyCall
-          roomUrl={roomUrl}
-          token={dailyToken}
-          studentRole={studentRole}
-          studentName={studentName}
-          opponentName={opponentName}
-          micEnabled={micEnabled}
-          camEnabled={camEnabled}
-          wsRef={wsRef}
-          onRemoteJoined={handleOpponentJoined}
-          onTranscript={handleTranscript}
-          currentPhase={store.phase}
-        />
-      ) : (
-        <div className="flex flex-1 items-center justify-center bg-gray-900 text-gray-400">
-          Connecting to video...
-        </div>
-      )}
+      {/* Video area + AI strip overlay */}
+      <div className="relative min-h-0 flex-1">
+        {dailyToken && roomUrl ? (
+          <DailyCall
+            roomUrl={roomUrl}
+            token={dailyToken}
+            studentRole={studentRole}
+            studentName={studentName}
+            opponentName={opponentName}
+            micEnabled={micEnabled}
+            camEnabled={camEnabled}
+            wsRef={wsRef}
+            onRemoteJoined={handleOpponentJoined}
+            onTranscript={handleTranscript}
+            currentPhase={store.phase}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center bg-gray-900 text-gray-400">
+            Connecting to video...
+          </div>
+        )}
 
-      {/* Single AI message strip */}
-      {isActiveDebate && (
-        <AiStrip
-          phase={store.phase}
-          studentRole={studentRole}
-          studentName={studentName}
-          opponentName={opponentName}
-          opponentThesis={opponentThesis}
-          opponentClaims={opponentClaims}
-          interventions={store.interventions}
-          timeRemaining={store.timeRemaining}
-          isGracePeriod={store.isGracePeriod}
-        />
-      )}
+        {/* AI strip — overlaid at bottom of video */}
+        {isActiveDebate && (
+          <div className="absolute inset-x-0 bottom-0 z-10">
+            <AiStrip
+              phase={store.phase}
+              studentRole={studentRole}
+              studentName={studentName}
+              opponentName={opponentName}
+              opponentThesis={opponentThesis}
+              opponentClaims={opponentClaims}
+              interventions={store.interventions}
+              timeRemaining={store.timeRemaining}
+              isGracePeriod={store.isGracePeriod}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Controls bar — mic, cam, +1min, skip, hangup */}
       <div className="flex items-center justify-center gap-3 bg-gray-900 px-4 py-2.5">
