@@ -22,6 +22,7 @@ import { ResetCaseButton } from "@/components/instructor/reset-case-button";
 import { ResetDebateButton } from "@/components/instructor/reset-debate-button";
 import { ImpersonateButton } from "@/components/instructor/impersonate-button";
 import { SignupLinkCard } from "@/components/instructor/signup-link-card";
+import { AutoRefresh } from "@/components/instructor/auto-refresh";
 import { Users as UsersIcon, FileText } from "lucide-react";
 
 export default async function InstructorAssignmentDetail({
@@ -94,7 +95,10 @@ export default async function InstructorAssignmentDetail({
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{assignment.title}</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">{assignment.title}</h1>
+          <AutoRefresh intervalMs={15000} />
+        </div>
         <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
           <Badge>{assignment.courseCode}</Badge>
           <span className="flex items-center gap-1">

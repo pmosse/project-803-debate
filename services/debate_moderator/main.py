@@ -160,6 +160,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 phase = s["current_phase"]
                 if phase in ("waiting", "consent", "completed"):
                     continue
+                if s.get("paused"):
+                    continue
                 if s["silence_nudge_sent"]:
                     continue
                 elapsed = time.time() - s["last_speech_time"]
@@ -194,6 +196,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             data = await websocket.receive_json()
 
             if data["type"] == "transcript_text":
+                # Skip processing when paused
+                if session.get("paused"):
+                    continue
+
                 speaker = data.get("speaker", "Unknown")
                 text = data.get("text", "")
                 is_final = data.get("is_final", False)
@@ -373,6 +379,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                     "target_student": "both",
                                     "message": phase_text,
                                 })
+
+            elif data["type"] in ("pause", "resume"):
+                session["paused"] = data["type"] == "pause"
+                # Broadcast to other client
+                await broadcast(session_id, {
+                    "type": data["type"],
+                }, exclude=websocket)
 
             elif data["type"] == "add_time":
                 seconds = data.get("seconds", 60)

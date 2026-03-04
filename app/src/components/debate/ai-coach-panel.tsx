@@ -46,6 +46,12 @@ export function getPhaseInstructions(
       opponent:
         "Answer concisely and defend your position. Stay calm under pressure.",
     },
+    rebuttal_b: {
+      you: claimsList
+        ? `Rebut A's cross-examination. Address their strongest points: ${claimsList}. Explain why your position still holds.`
+        : "Rebut A's cross-examination. Address their strongest points and explain why your position still holds.",
+      opponent: "Listen for any mischaracterizations of your argument.",
+    },
     crossexam_b: {
       you: "Ask pointed questions to challenge your opponent's claims. Focus on weak evidence or logical gaps.",
       opponent:
@@ -53,14 +59,8 @@ export function getPhaseInstructions(
     },
     rebuttal_a: {
       you: claimsList
-        ? `Address their strongest points: ${claimsList}. Explain why your position still holds.`
-        : "Address your opponent's strongest points. Explain why your position still holds.",
-      opponent: "Listen for any mischaracterizations of your argument.",
-    },
-    rebuttal_b: {
-      you: claimsList
-        ? `Address their strongest points: ${claimsList}. Explain why your position still holds.`
-        : "Address your opponent's strongest points. Explain why your position still holds.",
+        ? `Rebut B's cross-examination. Address their strongest points: ${claimsList}. Explain why your position still holds.`
+        : "Rebut B's cross-examination. Address their strongest points and explain why your position still holds.",
       opponent: "Listen for any mischaracterizations of your argument.",
     },
     closing_a: {

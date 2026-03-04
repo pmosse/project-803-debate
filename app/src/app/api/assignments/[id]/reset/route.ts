@@ -6,6 +6,7 @@ import {
   pairings,
   debateSessions,
   evaluations,
+  aiUsage,
   memos,
 } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -51,7 +52,13 @@ export async function POST(
 
   const sessionIds = sessions.map((s) => s.id);
 
-  // Delete in FK order: evaluations → debate sessions → pairings
+  // Delete in FK order: ai_usage → evaluations → debate sessions → pairings
+  if (pairingIds.length > 0) {
+    await db
+      .delete(aiUsage)
+      .where(inArray(aiUsage.pairingId, pairingIds));
+  }
+
   if (sessionIds.length > 0) {
     await db
       .delete(evaluations)

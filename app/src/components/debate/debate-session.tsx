@@ -8,18 +8,9 @@ import { DebateDebrief } from "./debate-debrief";
 import { DailyCall } from "./daily-call";
 import { AiStrip } from "./ai-strip";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward, Clock } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward, Clock, Pause, Play } from "lucide-react";
 import type { DebatePhase } from "@/lib/hooks/use-debate-store";
 import { Check, Bot, Loader2 } from "lucide-react";
-
-function speakMessage(text: string) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.0;
-  utterance.pitch = 1.0;
-  window.speechSynthesis.speak(utterance);
-}
 
 function ReadyCheckOverlay({
   message,
@@ -91,7 +82,7 @@ function ReadyCheckOverlay({
               {theirReady ? (
                 <Check className="mx-auto h-5 w-5 text-green-600" />
               ) : (
-                <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" />
+                <span className="text-xs text-gray-400">Waiting...</span>
               )}
             </div>
           </div>
@@ -106,6 +97,56 @@ function ReadyCheckOverlay({
           {myReady ? "Waiting for opponent..." : isLoading ? "Loading..." : "I'm Ready"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+const PHASE_ORDER: DebatePhase[] = [
+  "opening_a", "opening_b",
+  "crossexam_a", "rebuttal_b",
+  "crossexam_b", "rebuttal_a",
+  "closing_a", "closing_b",
+];
+
+const PHASE_SHORT_LABELS: Record<string, string> = {
+  opening_a: "O·A",
+  opening_b: "O·B",
+  crossexam_a: "X·A",
+  rebuttal_b: "R·B",
+  crossexam_b: "X·B",
+  rebuttal_a: "R·A",
+  closing_a: "C·A",
+  closing_b: "C·B",
+};
+
+function PhaseTimeline({ currentPhase }: { currentPhase: DebatePhase }) {
+  const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+
+  return (
+    <div className="flex items-center justify-center gap-1.5 bg-gray-800 px-3 py-1.5">
+      {PHASE_ORDER.map((phase, idx) => {
+        const isCompleted = currentIdx > idx;
+        const isCurrent = currentIdx === idx;
+
+        return (
+          <div key={phase} className="flex flex-col items-center gap-0.5">
+            <div
+              className={`h-2.5 w-2.5 rounded-full transition-colors ${
+                isCurrent
+                  ? "bg-yellow-400 ring-2 ring-yellow-400/30"
+                  : isCompleted
+                    ? "bg-green-500"
+                    : "bg-gray-600"
+              }`}
+            />
+            <span className={`text-[9px] font-medium ${
+              isCurrent ? "text-yellow-400" : isCompleted ? "text-green-400" : "text-gray-500"
+            }`}>
+              {PHASE_SHORT_LABELS[phase]}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -253,13 +294,14 @@ export function DebateSession({
         // Server sends ready check with AI transition message + summary
         const nextPhase = data.next_phase as DebatePhase;
         store.startReadyCheck(data.message || "", nextPhase, data.summary || "");
-        if (data.message) {
-          speakMessage(data.message);
-        }
       } else if (data.type === "ready_update") {
         store.updateReadyState(data.ready_a, data.ready_b);
       } else if (data.type === "add_time") {
         store.addTime(data.seconds || 60);
+      } else if (data.type === "pause") {
+        if (!store.isPaused) store.togglePause();
+      } else if (data.type === "resume") {
+        if (store.isPaused) store.togglePause();
       }
     };
 
@@ -370,6 +412,15 @@ export function DebateSession({
     }
   }, [store, studentRole]);
 
+  const handleTogglePause = useCallback(() => {
+    const newPaused = !store.isPaused;
+    store.togglePause();
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: newPaused ? "pause" : "resume" }));
+    }
+  }, [store]);
+
   const handleAddTime = useCallback(() => {
     // Add 60 seconds locally
     store.addTime(60);
@@ -452,8 +503,19 @@ export function DebateSession({
         />
       )}
 
-      {/* Video area + AI strip overlay */}
-      <div className="relative min-h-0 flex-1">
+      {/* Phase timeline */}
+      {isActiveDebate && <PhaseTimeline currentPhase={store.phase} />}
+
+      {/* Paused banner */}
+      {store.isPaused && (
+        <div className="flex items-center justify-center gap-2 bg-yellow-500 px-3 py-1.5 text-sm font-medium text-white">
+          <Pause className="h-4 w-4" />
+          Paused — timer stopped
+        </div>
+      )}
+
+      {/* Video area */}
+      <div className="min-h-0 flex-1">
         {dailyToken && roomUrl ? (
           <DailyCall
             roomUrl={roomUrl}
@@ -473,24 +535,22 @@ export function DebateSession({
             Connecting to video...
           </div>
         )}
-
-        {/* AI strip — overlaid at bottom of video */}
-        {isActiveDebate && (
-          <div className="absolute inset-x-0 bottom-0 z-10">
-            <AiStrip
-              phase={store.phase}
-              studentRole={studentRole}
-              studentName={studentName}
-              opponentName={opponentName}
-              opponentThesis={opponentThesis}
-              opponentClaims={opponentClaims}
-              interventions={store.interventions}
-              timeRemaining={store.timeRemaining}
-              isGracePeriod={store.isGracePeriod}
-            />
-          </div>
-        )}
       </div>
+
+      {/* AI strip — light box below video */}
+      {isActiveDebate && (
+        <AiStrip
+          phase={store.phase}
+          studentRole={studentRole}
+          studentName={studentName}
+          opponentName={opponentName}
+          opponentThesis={opponentThesis}
+          opponentClaims={opponentClaims}
+          interventions={store.interventions}
+          timeRemaining={store.timeRemaining}
+          isGracePeriod={store.isGracePeriod}
+        />
+      )}
 
       {/* Controls bar — mic, cam, +1min, skip, hangup */}
       <div className="flex items-center justify-center gap-3 bg-gray-900 px-4 py-2.5">
@@ -514,6 +574,18 @@ export function DebateSession({
         {showTimedControls && (
           <>
             <div className="mx-1 h-6 w-px bg-gray-700" />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleTogglePause}
+              className={store.isPaused
+                ? "border-yellow-500 bg-yellow-600 text-white hover:bg-yellow-500"
+                : "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
+              }
+              title={store.isPaused ? "Resume" : "Pause"}
+            >
+              {store.isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            </Button>
             <Button
               variant="outline"
               size="icon"

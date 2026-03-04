@@ -36,10 +36,10 @@ export const PHASE_CONFIG: Record<
   consent: { label: "Consent", duration: 0, next: "opening_a" },
   opening_a: { label: "Opening — Student A", duration: 120, next: "opening_b" },
   opening_b: { label: "Opening — Student B", duration: 120, next: "crossexam_a" },
-  crossexam_a: { label: "Cross-Examination — A asks B", duration: 180, next: "crossexam_b" },
+  crossexam_a: { label: "Cross-Examination — A asks B", duration: 180, next: "rebuttal_b" },
+  rebuttal_b: { label: "Rebuttal — Student B", duration: 60, next: "crossexam_b" },
   crossexam_b: { label: "Cross-Examination — B asks A", duration: 180, next: "rebuttal_a" },
-  rebuttal_a: { label: "Rebuttal — Student A", duration: 60, next: "rebuttal_b" },
-  rebuttal_b: { label: "Rebuttal — Student B", duration: 60, next: "closing_a" },
+  rebuttal_a: { label: "Rebuttal — Student A", duration: 60, next: "closing_a" },
   closing_a: { label: "Closing — Student A", duration: 30, next: "closing_b" },
   closing_b: { label: "Closing — Student B", duration: 30, next: "completed" },
   completed: { label: "Debate Complete", duration: 0, next: null },
@@ -56,6 +56,7 @@ interface DebateStore {
   phase: DebatePhase;
   timeRemaining: number;
   isGracePeriod: boolean;
+  isPaused: boolean;
   transcript: TranscriptEntry[];
   interventions: AiIntervention[];
   connectionStatus: "disconnected" | "connecting" | "connected";
@@ -85,6 +86,9 @@ interface DebateStore {
   setStudentRole: (role: "A" | "B") => void;
   setShowPhaseOverlay: (show: boolean) => void;
 
+  // Pause
+  togglePause: () => void;
+
   // Time extension
   addTime: (seconds: number) => void;
 
@@ -100,6 +104,7 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   phase: "waiting",
   timeRemaining: 0,
   isGracePeriod: false,
+  isPaused: false,
   transcript: [],
   interventions: [],
   connectionStatus: "disconnected",
@@ -158,10 +163,10 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   },
 
   tick: () => {
-    const { timeRemaining, isGracePeriod, phase, readyCheck } = get();
+    const { timeRemaining, isGracePeriod, phase, readyCheck, isPaused } = get();
     if (phase === "waiting" || phase === "consent" || phase === "completed") return;
-    // Pause timer during ready check
-    if (readyCheck) return;
+    // Pause timer during ready check or pause
+    if (readyCheck || isPaused) return;
 
     if (timeRemaining > 1) {
       set({ timeRemaining: timeRemaining - 1 });
@@ -220,6 +225,9 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   setStudentRole: (role) => set({ studentRole: role }),
 
   setShowPhaseOverlay: (show) => set({ showPhaseOverlay: show }),
+
+  // Pause
+  togglePause: () => set((state) => ({ isPaused: !state.isPaused })),
 
   // Time extension
   addTime: (seconds) => {

@@ -61,13 +61,10 @@ export function AiStrip({
   isGracePeriod,
 }: AiStripProps) {
   const [activeIntervention, setActiveIntervention] = useState<AiIntervention | null>(null);
-  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastInterventionIdRef = useRef<number>(0);
+  const lastPhaseRef = useRef<string>(phase);
 
-  const config = PHASE_CONFIG[phase];
-  const hasDuration = config.duration > 0;
-
-  // Watch for new non-phase_prompt interventions
+  // Watch for new non-phase_prompt interventions — sticky until replaced
   useEffect(() => {
     const realInterventions = interventions.filter((i) => i.type !== "phase_prompt");
     const latest = realInterventions[realInterventions.length - 1];
@@ -75,18 +72,18 @@ export function AiStrip({
 
     lastInterventionIdRef.current = latest.timestamp;
     setActiveIntervention(latest);
-
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-    dismissTimerRef.current = setTimeout(() => {
-      setActiveIntervention(null);
-    }, 10000);
   }, [interventions]);
 
+  // Clear intervention on phase change
   useEffect(() => {
-    return () => {
-      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-    };
-  }, []);
+    if (phase !== lastPhaseRef.current) {
+      lastPhaseRef.current = phase;
+      setActiveIntervention(null);
+    }
+  }, [phase]);
+
+  const config = PHASE_CONFIG[phase];
+  const hasDuration = config.duration > 0;
 
   const isMyTurn =
     (phase.endsWith("_a") && studentRole === "A") ||
@@ -121,11 +118,11 @@ export function AiStrip({
 
   return (
     <div
-      className={`border-l-4 bg-black/70 backdrop-blur-sm px-3 py-2.5 ${borderClass}`}
+      className={`border-l-4 bg-white px-3 py-2.5 ${borderClass}`}
     >
       <div className="flex items-center gap-2 mb-1">
-        <Icon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-        <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide flex-1">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-1">
           {label}
         </span>
         {hasDuration && (
@@ -137,7 +134,7 @@ export function AiStrip({
           </span>
         )}
       </div>
-      <p className="text-sm leading-snug text-gray-100">{message}</p>
+      <p className="text-sm leading-snug text-gray-700">{message}</p>
     </div>
   );
 }
