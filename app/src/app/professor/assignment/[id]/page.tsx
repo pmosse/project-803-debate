@@ -115,9 +115,9 @@ export default async function InstructorAssignmentDetail({
       <AssignmentTabs>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="students">Students</TabsTrigger>
-          <TabsTrigger value="pairings">Pairings</TabsTrigger>
-          <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="students">Students ({students.length})</TabsTrigger>
+          <TabsTrigger value="pairings">Pairings ({allPairings.length})</TabsTrigger>
+          <TabsTrigger value="results">Results ({completedCount})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
