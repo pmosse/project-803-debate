@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { pairings, debateSessions, evaluations } from "@/lib/db/schema";
+import { pairings, debateSessions, evaluations, aiUsage } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { isPrivilegedRole } from "@/lib/auth/roles";
 
@@ -16,7 +16,9 @@ export async function POST(
 
   const { id } = await params;
 
-  // Delete in FK order: evaluations → debate sessions
+  // Delete in FK order: ai_usage → evaluations → debate sessions
+  await db.delete(aiUsage).where(eq(aiUsage.pairingId, id));
+
   const sessions = await db
     .select()
     .from(debateSessions)
