@@ -17,7 +17,7 @@ interface AiCoachPanelProps {
 
 // --- Zone 1: Phase context (persistent, instant) ---
 
-function getPhaseInstructions(
+export function getPhaseInstructions(
   phase: string,
   opponentThesis?: string,
   opponentClaims?: string[]

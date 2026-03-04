@@ -2,17 +2,15 @@
 
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useDebateStore, PHASE_CONFIG } from "@/lib/hooks/use-debate-store";
-import { PhaseTimer } from "./phase-timer";
-import { TranscriptPanel } from "./transcript-panel";
-import { AiCoachPanel } from "./ai-coach-panel";
 import { ConsentModal } from "./consent-modal";
 import { PhaseOverlay } from "./phase-overlay";
 import { DebateDebrief } from "./debate-debrief";
 import { DailyCall } from "./daily-call";
+import { AiStrip } from "./ai-strip";
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward, Clock } from "lucide-react";
 import type { DebatePhase } from "@/lib/hooks/use-debate-store";
-import { Check, Bot, WifiOff, Loader2 } from "lucide-react";
+import { Check, Bot, Loader2 } from "lucide-react";
 
 function speakMessage(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -21,138 +19,6 @@ function speakMessage(text: string) {
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
   window.speechSynthesis.speak(utterance);
-}
-
-function AiStatusIndicator({
-  connectionStatus,
-  transcriptCount,
-}: {
-  connectionStatus: "disconnected" | "connecting" | "connected";
-  transcriptCount: number;
-}) {
-  if (connectionStatus === "disconnected") {
-    return (
-      <div className="flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1">
-        <WifiOff className="h-3 w-3 text-red-600" />
-        <span className="text-[11px] font-medium text-red-700">AI Offline</span>
-      </div>
-    );
-  }
-
-  if (connectionStatus === "connecting") {
-    return (
-      <div className="flex items-center gap-1.5 rounded-full bg-yellow-100 px-2.5 py-1">
-        <Loader2 className="h-3 w-3 animate-spin text-yellow-600" />
-        <span className="text-[11px] font-medium text-yellow-700">Connecting...</span>
-      </div>
-    );
-  }
-
-  // Connected
-  const hasTranscripts = transcriptCount > 0;
-  return (
-    <div className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1">
-      <Bot className="h-3 w-3 text-emerald-600" />
-      <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-      </span>
-      <span className="text-[11px] font-medium text-emerald-700">
-        {hasTranscripts ? "Listening" : "AI Ready"}
-      </span>
-    </div>
-  );
-}
-
-/** Visible debate phases grouped for the timeline (no waiting/consent/completed). */
-const TIMELINE_PHASES: { key: DebatePhase; group: string; suffix: "a" | "b" }[] = [
-  { key: "opening_a", group: "Opening", suffix: "a" },
-  { key: "opening_b", group: "Opening", suffix: "b" },
-  { key: "crossexam_a", group: "Cross-Exam", suffix: "a" },
-  { key: "crossexam_b", group: "Cross-Exam", suffix: "b" },
-  { key: "rebuttal_a", group: "Rebuttal", suffix: "a" },
-  { key: "rebuttal_b", group: "Rebuttal", suffix: "b" },
-  { key: "closing_a", group: "Closing", suffix: "a" },
-  { key: "closing_b", group: "Closing", suffix: "b" },
-];
-
-function phaseIndex(phase: DebatePhase): number {
-  return TIMELINE_PHASES.findIndex((p) => p.key === phase);
-}
-
-function PhaseTimeline({
-  currentPhase,
-  studentName,
-  opponentName,
-  studentRole,
-}: {
-  currentPhase: DebatePhase;
-  studentName: string;
-  opponentName: string;
-  studentRole: "A" | "B";
-}) {
-  const currentIdx = phaseIndex(currentPhase);
-  const firstName = (name: string) => name.split(" ")[0];
-  const myFirst = firstName(studentName);
-  const theirFirst = firstName(opponentName);
-
-  return (
-    <div className="border-b bg-gray-50 px-4 py-2">
-      <div className="flex items-center gap-1">
-        {TIMELINE_PHASES.map((p, i) => {
-          const isActive = p.key === currentPhase;
-          const isDone = currentIdx > i;
-          const isMine =
-            (p.suffix === "a" && studentRole === "A") ||
-            (p.suffix === "b" && studentRole === "B");
-          const isAskingSuffix = p.group === "Cross-Exam";
-          const askerName = isMine ? myFirst : theirFirst;
-          const responderName = isMine ? theirFirst : myFirst;
-          const speakerLabel = isAskingSuffix
-            ? `${askerName} to ${responderName}`
-            : (isMine ? myFirst : theirFirst);
-
-          return (
-            <div key={p.key} className="flex flex-1 flex-col items-center">
-              {/* Dot / check */}
-              <div
-                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                  isActive
-                    ? "bg-[#1D4F91] text-white ring-2 ring-[#1D4F91]/30"
-                    : isDone
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-200 text-gray-400"
-                }`}
-              >
-                {isDone ? <Check className="h-3.5 w-3.5" /> : i + 1}
-              </div>
-              {/* Label */}
-              <span
-                className={`mt-1 text-center text-[10px] leading-tight ${
-                  isActive ? "font-semibold text-[#1D4F91]" : "text-gray-400"
-                }`}
-              >
-                {p.group}
-                <br />
-                <span className={isActive ? "text-[#1D4F91]" : "text-gray-300"}>
-                  {speakerLabel}
-                </span>
-              </span>
-              {/* Connector line (between dots) */}
-              {i < TIMELINE_PHASES.length - 1 && (
-                <div
-                  className={`absolute mt-3 h-0.5 w-full ${
-                    isDone ? "bg-green-400" : "bg-gray-200"
-                  }`}
-                  style={{ display: "none" }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function ReadyCheckOverlay({
@@ -558,8 +424,11 @@ export function DebateSession({
     (store.phase.endsWith("_a") && studentRole === "A") ||
     (store.phase.endsWith("_b") && studentRole === "B");
 
+  const showTimedControls =
+    isActiveDebate && PHASE_CONFIG[store.phase].duration > 0 && !store.readyCheck;
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
+    <div className="flex h-[calc(100dvh)] flex-col bg-gray-900">
       {/* Ready check overlay */}
       {store.readyCheck && (
         <ReadyCheckOverlay
@@ -574,40 +443,6 @@ export function DebateSession({
         />
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between border-b bg-white px-4 py-2">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-gray-700">
-            DEBATE: {assignmentTitle}
-          </span>
-          <AiStatusIndicator
-            connectionStatus={store.connectionStatus}
-            transcriptCount={store.transcript.filter((t) => t.isFinal).length}
-          />
-        </div>
-        {isActiveDebate ? (
-          <PhaseTimer
-            phase={store.phase}
-            timeRemaining={store.timeRemaining}
-            isGracePeriod={store.isGracePeriod}
-            nameA={studentRole === "A" ? studentName : opponentName}
-            nameB={studentRole === "B" ? studentName : opponentName}
-          />
-        ) : (
-          <span className="text-sm text-gray-400">Waiting for opponent...</span>
-        )}
-      </div>
-
-      {/* Phase timeline — only during active debate */}
-      {isActiveDebate && (
-        <PhaseTimeline
-          currentPhase={store.phase}
-          studentName={studentName}
-          opponentName={opponentName}
-          studentRole={studentRole}
-        />
-      )}
-
       {/* Phase overlay */}
       {store.showPhaseOverlay && (
         <PhaseOverlay
@@ -617,7 +452,7 @@ export function DebateSession({
         />
       )}
 
-      {/* Video area */}
+      {/* Video area — takes all available space */}
       {dailyToken && roomUrl ? (
         <DailyCall
           roomUrl={roomUrl}
@@ -638,9 +473,9 @@ export function DebateSession({
         </div>
       )}
 
-      {/* AI Coach panel — phase context + stacking AI messages */}
+      {/* Single AI message strip */}
       {isActiveDebate && (
-        <AiCoachPanel
+        <AiStrip
           phase={store.phase}
           studentRole={studentRole}
           studentName={studentName}
@@ -648,46 +483,18 @@ export function DebateSession({
           opponentThesis={opponentThesis}
           opponentClaims={opponentClaims}
           interventions={store.interventions}
+          timeRemaining={store.timeRemaining}
+          isGracePeriod={store.isGracePeriod}
         />
       )}
 
-      {/* Live transcript — visible in all active phases */}
-      {isActiveDebate && (
-        <TranscriptPanel
-          transcript={store.transcript}
-          nameA={studentRole === "A" ? studentName : opponentName}
-          nameB={studentRole === "B" ? studentName : opponentName}
-        />
-      )}
-
-      {/* Floating action buttons — visible during active timed phases */}
-      {isActiveDebate && PHASE_CONFIG[store.phase].duration > 0 && !store.readyCheck && (
-        <div className="flex justify-center gap-3 py-1.5 bg-gray-900/50">
-          <button
-            onClick={handleAddTime}
-            className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg hover:bg-white transition-colors backdrop-blur-sm"
-          >
-            <Clock className="h-4 w-4" />
-            +1 min
-          </button>
-          {PHASE_CONFIG[store.phase].next && isMySpeakingTurn && (
-            <button
-              onClick={handleSkip}
-              className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg hover:bg-white transition-colors backdrop-blur-sm"
-            >
-              <SkipForward className="h-4 w-4" />
-              Skip to next phase
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Controls */}
-      <div className="flex items-center justify-center gap-4 border-t bg-white px-4 py-3">
+      {/* Controls bar — mic, cam, +1min, skip, hangup */}
+      <div className="flex items-center justify-center gap-3 bg-gray-900 px-4 py-2.5">
         <Button
           variant={micEnabled ? "outline" : "destructive"}
           size="icon"
           onClick={() => setMicEnabled(!micEnabled)}
+          className={micEnabled ? "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700" : ""}
         >
           {micEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
         </Button>
@@ -695,9 +502,38 @@ export function DebateSession({
           variant={camEnabled ? "outline" : "destructive"}
           size="icon"
           onClick={() => setCamEnabled(!camEnabled)}
+          className={camEnabled ? "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700" : ""}
         >
           {camEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
         </Button>
+
+        {showTimedControls && (
+          <>
+            <div className="mx-1 h-6 w-px bg-gray-700" />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleAddTime}
+              className="border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
+              title="+1 minute"
+            >
+              <Clock className="h-4 w-4" />
+            </Button>
+            {PHASE_CONFIG[store.phase].next && isMySpeakingTurn && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleSkip}
+                className="border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
+                title="Skip to next phase"
+              >
+                <SkipForward className="h-4 w-4" />
+              </Button>
+            )}
+          </>
+        )}
+
+        <div className="mx-1 h-6 w-px bg-gray-700" />
         <Button
           variant="destructive"
           size="icon"
