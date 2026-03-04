@@ -324,6 +324,30 @@ export function DebateSession({
     ws.send(JSON.stringify({ type: "phase_command", phase: store.phase }));
   }, [store.phase]);
 
+  // When debate completes naturally (timer runs out on closing_b),
+  // persist completion to the DB so evaluations trigger.
+  useEffect(() => {
+    if (store.phase !== "completed" || !store.sessionId) return;
+
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "end" }));
+    }
+
+    fetch(`/api/debates/${pairingId}/session`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "completed",
+        transcript: store.transcript.filter((t) => t.isFinal),
+        durationSeconds: Math.floor(
+          (Date.now() - (store.transcript[0]?.timestamp || Date.now())) / 1000
+        ),
+      }),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.phase, store.sessionId, pairingId]);
+
   const handleConsent = useCallback(async () => {
     store.setConsent(studentRole, true);
 
@@ -369,32 +393,11 @@ export function DebateSession({
     }
   }, [store, pairingId]);
 
-  const handleLeave = useCallback(async () => {
-    // Send end signal to moderator so it saves final transcript
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "end" }));
-    }
-
-    // Save session state
-    await fetch(`/api/debates/${pairingId}/session`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "completed",
-        transcript: store.transcript.filter((t) => t.isFinal),
-        phasesLog: Object.entries(PHASE_CONFIG)
-          .filter(([key]) => key !== "waiting" && key !== "consent")
-          .map(([phase]) => ({ phase, startedAt: 0 })),
-        durationSeconds: Math.floor(
-          (Date.now() - (store.transcript[0]?.timestamp || Date.now())) / 1000
-        ),
-      }),
-    });
-
+  const handleLeave = useCallback(() => {
+    // Setting phase to "completed" triggers the completion effect
+    // which sends the WS end signal and persists to DB
     store.setPhase("completed");
-    wsRef.current?.close();
-  }, [pairingId, store]);
+  }, [store]);
 
   const handleReadyClick = useCallback(() => {
     const ws = wsRef.current;
