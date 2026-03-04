@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { pairings, debateSessions } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { pairings, debateSessions, evaluations } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { isPrivilegedRole } from "@/lib/auth/roles";
 
 export async function POST(
@@ -16,14 +16,16 @@ export async function POST(
 
   const { id } = await params;
 
-  // Delete any debate sessions for this pairing
+  // Delete in FK order: evaluations → debate sessions
   const sessions = await db
     .select()
     .from(debateSessions)
     .where(eq(debateSessions.pairingId, id));
 
-  for (const s of sessions) {
-    await db.delete(debateSessions).where(eq(debateSessions.id, s.id));
+  const sessionIds = sessions.map((s) => s.id);
+  if (sessionIds.length > 0) {
+    await db.delete(evaluations).where(inArray(evaluations.debateSessionId, sessionIds));
+    await db.delete(debateSessions).where(inArray(debateSessions.id, sessionIds));
   }
 
   // Reset pairing status back to "paired"
