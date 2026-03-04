@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { assignments, memos, users } from "@/lib/db/schema";
+import { assignments, assignmentEnrollments, memos } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,10 +16,9 @@ export default async function InstructorDashboard() {
     .select({
       assignment: assignments,
       studentCount: sql<number>`(
-        SELECT COUNT(DISTINCT ${users.id})
-        FROM ${users}
-        WHERE ${users.courseCode} = ${assignments.courseCode}
-        AND ${users.role} = 'student'
+        SELECT COUNT(DISTINCT ${assignmentEnrollments.studentId})
+        FROM ${assignmentEnrollments}
+        WHERE ${assignmentEnrollments.assignmentId} = ${assignments.id}
       )`.as("student_count"),
       memoCount: sql<number>`(
         SELECT COUNT(*)

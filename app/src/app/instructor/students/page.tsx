@@ -54,15 +54,6 @@ export default async function InstructorStudentsPage() {
           .from(users)
           .where(and(inArray(users.id, studentIds), eq(users.role, "student")))
       : [];
-  } else {
-    // Fallback: use courseCode
-    const courseCode = (session.user as any).courseCode;
-    if (courseCode) {
-      students = await db
-        .select()
-        .from(users)
-        .where(and(eq(users.courseCode, courseCode), eq(users.role, "student")));
-    }
   }
 
   const allMemos = await db

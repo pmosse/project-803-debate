@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import {
   assignments,
+  assignmentEnrollments,
   memos,
   users,
   pairings,
@@ -40,12 +41,14 @@ export default async function InstructorAssignmentDetail({
 
   if (!assignment) redirect("/professor/dashboard");
 
-  const students = await db
-    .select()
-    .from(users)
-    .where(
-      and(eq(users.courseCode, assignment.courseCode), eq(users.role, "student"))
-    );
+  const enrollmentRows = await db
+    .select({ studentId: assignmentEnrollments.studentId })
+    .from(assignmentEnrollments)
+    .where(eq(assignmentEnrollments.assignmentId, id));
+  const enrolledIds = enrollmentRows.map((e) => e.studentId);
+  const students = enrolledIds.length > 0
+    ? await db.select().from(users).where(inArray(users.id, enrolledIds))
+    : [];
 
   const allMemos = await db
     .select()

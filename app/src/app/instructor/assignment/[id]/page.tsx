@@ -3,13 +3,12 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import {
   assignments,
+  assignmentEnrollments,
   memos,
   users,
   pairings,
   debateSessions,
   evaluations,
-  classMemberships,
-  classes,
 } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import Link from "next/link";
@@ -42,35 +41,14 @@ export default async function InstructorAssignmentDetail({
 
   if (!assignment) redirect("/instructor/dashboard");
 
-  // Get students: prefer class membership if assignment has classId, else fall back to courseCode
-  let students;
-  let className: string | null = null;
-  if (assignment.classId) {
-    const memberRows = await db
-      .select({ userId: classMemberships.userId })
-      .from(classMemberships)
-      .where(eq(classMemberships.classId, assignment.classId));
-    const memberIds = memberRows.map((m) => m.userId);
-    students = memberIds.length > 0
-      ? await db
-          .select()
-          .from(users)
-          .where(and(inArray(users.id, memberIds), eq(users.role, "student")))
-      : [];
-    const [classRow] = await db
-      .select({ name: classes.name })
-      .from(classes)
-      .where(eq(classes.id, assignment.classId))
-      .limit(1);
-    className = classRow?.name || null;
-  } else {
-    students = await db
-      .select()
-      .from(users)
-      .where(
-        and(eq(users.courseCode, assignment.courseCode), eq(users.role, "student"))
-      );
-  }
+  const enrollmentRows = await db
+    .select({ studentId: assignmentEnrollments.studentId })
+    .from(assignmentEnrollments)
+    .where(eq(assignmentEnrollments.assignmentId, id));
+  const enrolledIds = enrollmentRows.map((e) => e.studentId);
+  const students = enrolledIds.length > 0
+    ? await db.select().from(users).where(inArray(users.id, enrolledIds))
+    : [];
 
   const allMemos = await db
     .select()
@@ -118,7 +96,7 @@ export default async function InstructorAssignmentDetail({
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">{assignment.title}</h1>
         <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
-          <Badge>{className || assignment.courseCode}</Badge>
+          <Badge>{assignment.courseCode}</Badge>
           <span className="flex items-center gap-1">
             <UsersIcon className="h-3.5 w-3.5" />
             {students.length} students
