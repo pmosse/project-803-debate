@@ -122,9 +122,17 @@ export default async function InstructorStudentsPage() {
                 <tr key={student.id} className="border-b last:border-0">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1D4F91]/10 text-sm font-medium text-[#1D4F91]">
-                        {student.name.charAt(0)}
-                      </span>
+                      {student.photoPath ? (
+                        <img
+                          src={`/api/uploads/${student.photoPath}`}
+                          alt={student.name}
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1D4F91]/10 text-sm font-medium text-[#1D4F91]">
+                          {student.name.charAt(0)}
+                        </span>
+                      )}
                       <span className="text-sm font-medium text-gray-900">{student.name}</span>
                     </div>
                   </td>

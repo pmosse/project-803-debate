@@ -88,6 +88,7 @@ interface DebateStore {
 
   // Pause
   togglePause: () => void;
+  setPaused: (paused: boolean) => void;
 
   // Time extension
   addTime: (seconds: number) => void;
@@ -228,6 +229,7 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
 
   // Pause
   togglePause: () => set((state) => ({ isPaused: !state.isPaused })),
+  setPaused: (paused: boolean) => set({ isPaused: paused }),
 
   // Time extension
   addTime: (seconds) => {

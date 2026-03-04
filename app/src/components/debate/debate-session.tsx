@@ -46,8 +46,7 @@ function ReadyCheckOverlay({
         </div>
 
         {isLoading ? (
-          <div className="mb-5 flex items-center gap-2 text-sm text-gray-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="mb-5 text-sm text-gray-500">
             Generating phase summary...
           </div>
         ) : (
@@ -70,7 +69,7 @@ function ReadyCheckOverlay({
               {myReady ? (
                 <Check className="mx-auto h-5 w-5 text-green-600" />
               ) : (
-                <div className="mx-auto h-5 w-5 rounded-full border-2 border-gray-300" />
+                <span className="text-xs text-gray-400">Waiting for you</span>
               )}
             </div>
           </div>
@@ -82,7 +81,7 @@ function ReadyCheckOverlay({
               {theirReady ? (
                 <Check className="mx-auto h-5 w-5 text-green-600" />
               ) : (
-                <span className="text-xs text-gray-400">Waiting...</span>
+                <span className="text-xs text-gray-400">Waiting</span>
               )}
             </div>
           </div>
@@ -94,7 +93,7 @@ function ReadyCheckOverlay({
           className="w-full"
           size="lg"
         >
-          {myReady ? "Waiting for opponent..." : isLoading ? "Loading..." : "I'm Ready"}
+          {myReady ? `Waiting for ${theirFirst}...` : isLoading ? "Loading..." : "I'm Ready"}
         </Button>
       </div>
     </div>
@@ -108,42 +107,55 @@ const PHASE_ORDER: DebatePhase[] = [
   "closing_a", "closing_b",
 ];
 
-const PHASE_SHORT_LABELS: Record<string, string> = {
-  opening_a: "O·A",
-  opening_b: "O·B",
-  crossexam_a: "X·A",
-  rebuttal_b: "R·B",
-  crossexam_b: "X·B",
-  rebuttal_a: "R·A",
-  closing_a: "C·A",
-  closing_b: "C·B",
+const PHASE_LABELS: Record<string, string> = {
+  opening_a: "Opening A",
+  opening_b: "Opening B",
+  crossexam_a: "Cross-Exam A",
+  rebuttal_b: "Rebuttal B",
+  crossexam_b: "Cross-Exam B",
+  rebuttal_a: "Rebuttal A",
+  closing_a: "Closing A",
+  closing_b: "Closing B",
 };
 
-function PhaseTimeline({ currentPhase }: { currentPhase: DebatePhase }) {
+function PhaseTimeline({ currentPhase, nameA, nameB }: { currentPhase: DebatePhase; nameA: string; nameB: string }) {
   const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+  const truncate = (s: string) => s.length > 10 ? s.slice(0, 9) + "…" : s;
+  const firstA = truncate(nameA.split(" ")[0]);
+  const firstB = truncate(nameB.split(" ")[0]);
 
   return (
-    <div className="flex items-center justify-center gap-1.5 bg-gray-800 px-3 py-1.5">
+    <div className="flex items-center justify-center gap-1 bg-white/95 border-b px-3 py-1.5">
       {PHASE_ORDER.map((phase, idx) => {
         const isCompleted = currentIdx > idx;
         const isCurrent = currentIdx === idx;
+        const label = (PHASE_LABELS[phase] || phase)
+          .replace(/ A$/, ` ${firstA}`)
+          .replace(/ B$/, ` ${firstB}`);
 
         return (
-          <div key={phase} className="flex flex-col items-center gap-0.5">
-            <div
-              className={`h-2.5 w-2.5 rounded-full transition-colors ${
-                isCurrent
-                  ? "bg-yellow-400 ring-2 ring-yellow-400/30"
-                  : isCompleted
-                    ? "bg-green-500"
-                    : "bg-gray-600"
-              }`}
-            />
-            <span className={`text-[9px] font-medium ${
-              isCurrent ? "text-yellow-400" : isCompleted ? "text-green-400" : "text-gray-500"
+          <div key={phase} className="flex items-center">
+            <div className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+              isCurrent
+                ? "bg-[#1D4F91] text-white"
+                : isCompleted
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-100 text-gray-400"
             }`}>
-              {PHASE_SHORT_LABELS[phase]}
-            </span>
+              <div
+                className={`h-1.5 w-1.5 rounded-full ${
+                  isCurrent
+                    ? "bg-white"
+                    : isCompleted
+                      ? "bg-green-500"
+                      : "bg-gray-300"
+                }`}
+              />
+              {label}
+            </div>
+            {idx < PHASE_ORDER.length - 1 && (
+              <div className={`mx-0.5 h-px w-2 ${isCompleted ? "bg-green-300" : "bg-gray-200"}`} />
+            )}
           </div>
         );
       })}
@@ -157,7 +169,9 @@ interface DebateSessionProps {
   roomUrl: string;
   studentRole: "A" | "B";
   studentName: string;
+  studentPhotoUrl?: string | null;
   opponentName: string;
+  opponentPhotoUrl?: string | null;
   opponentThesis?: string;
   opponentClaims?: string[];
 }
@@ -168,7 +182,9 @@ export function DebateSession({
   roomUrl,
   studentRole,
   studentName,
+  studentPhotoUrl,
   opponentName,
+  opponentPhotoUrl,
   opponentThesis,
   opponentClaims,
 }: DebateSessionProps) {
@@ -299,9 +315,9 @@ export function DebateSession({
       } else if (data.type === "add_time") {
         store.addTime(data.seconds || 60);
       } else if (data.type === "pause") {
-        if (!store.isPaused) store.togglePause();
+        store.setPaused(true);
       } else if (data.type === "resume") {
-        if (store.isPaused) store.togglePause();
+        store.setPaused(false);
       }
     };
 
@@ -507,7 +523,13 @@ export function DebateSession({
       )}
 
       {/* Phase timeline */}
-      {isActiveDebate && <PhaseTimeline currentPhase={store.phase} />}
+      {isActiveDebate && (
+        <PhaseTimeline
+          currentPhase={store.phase}
+          nameA={studentRole === "A" ? studentName : opponentName}
+          nameB={studentRole === "B" ? studentName : opponentName}
+        />
+      )}
 
       {/* Paused banner */}
       {store.isPaused && (
@@ -525,7 +547,9 @@ export function DebateSession({
             token={dailyToken}
             studentRole={studentRole}
             studentName={studentName}
+            studentPhotoUrl={studentPhotoUrl}
             opponentName={opponentName}
+            opponentPhotoUrl={opponentPhotoUrl}
             micEnabled={micEnabled}
             camEnabled={camEnabled}
             wsRef={wsRef}

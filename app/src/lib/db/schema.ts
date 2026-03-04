@@ -48,6 +48,7 @@ export const users = pgTable("users", {
   role: userRoleEnum("role").notNull().default("student"),
   courseCode: text("course_code"),
   passwordHash: text("password_hash"),
+  photoPath: text("photo_path"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

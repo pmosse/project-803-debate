@@ -9,7 +9,7 @@ import {
   DailyVideo,
   DailyAudio,
 } from "@daily-co/daily-react";
-import { Video, AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 interface TranscriptEvent {
   speaker: string;
@@ -22,13 +22,44 @@ interface DailyCallProps {
   token: string;
   studentRole: "A" | "B";
   studentName: string;
+  studentPhotoUrl?: string | null;
   opponentName: string;
+  opponentPhotoUrl?: string | null;
   micEnabled: boolean;
   camEnabled: boolean;
   wsRef: React.RefObject<WebSocket | null>;
   onRemoteJoined?: () => void;
   onTranscript?: (event: TranscriptEvent) => void;
   currentPhase?: string;
+}
+
+function AvatarFallback({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  if (photoUrl) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <img
+          src={photoUrl}
+          alt={name}
+          className="h-20 w-20 rounded-full object-cover"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-600 text-2xl font-semibold text-white">
+        {initials}
+      </div>
+    </div>
+  );
 }
 
 export function DailyCall(props: DailyCallProps) {
@@ -69,7 +100,9 @@ export function DailyCall(props: DailyCallProps) {
 function DailyCallInner({
   studentRole,
   studentName,
+  studentPhotoUrl,
   opponentName,
+  opponentPhotoUrl,
   micEnabled,
   camEnabled,
   wsRef,
@@ -302,17 +335,22 @@ function DailyCallInner({
         isMySpeakingTurn ? "ring-2 ring-yellow-400 ring-offset-1 ring-offset-gray-900" : ""
       }`}>
         {localSessionId ? (
-          <DailyVideo
-            sessionId={localSessionId}
-            type="video"
-            mirror
-            fit="cover"
-            className="h-full w-full object-cover"
-          />
+          <>
+            <DailyVideo
+              sessionId={localSessionId}
+              type="video"
+              mirror
+              fit="cover"
+              className="h-full w-full object-cover"
+            />
+            {!camEnabled && (
+              <div className="absolute inset-0">
+                <AvatarFallback name={studentName} photoUrl={studentPhotoUrl} />
+              </div>
+            )}
+          </>
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <Video className="h-12 w-12 text-gray-500 opacity-30" />
-          </div>
+          <AvatarFallback name={studentName} photoUrl={studentPhotoUrl} />
         )}
         <div className={`absolute bottom-2 left-2 rounded px-2 py-1 text-xs text-white ${
           isMySpeakingTurn ? "bg-yellow-500/80" : "bg-black/50"
@@ -335,7 +373,7 @@ function DailyCallInner({
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center text-gray-500">
-              <Video className="mx-auto h-12 w-12 opacity-30" />
+              <AvatarFallback name={opponentName} photoUrl={opponentPhotoUrl} />
               <p className="mt-2 text-sm">Waiting for {theirFirstName}...</p>
             </div>
           </div>

@@ -33,15 +33,24 @@ export default async function DebatePage({
     .where(eq(assignments.id, pairing.assignmentId))
     .limit(1);
 
-  // Fetch opponent name and memo analysis for personalized instructions
+  // Fetch own photo
+  const [self] = await db
+    .select({ photoPath: users.photoPath })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+  const myPhotoUrl = self?.photoPath ? `/api/uploads/${self.photoPath}` : null;
+
+  // Fetch opponent name, photo, and memo analysis for personalized instructions
   const opponentId = isStudentA ? pairing.studentBId : pairing.studentAId;
   const [opponent] = await db
-    .select({ name: users.name })
+    .select({ name: users.name, photoPath: users.photoPath })
     .from(users)
     .where(eq(users.id, opponentId))
     .limit(1);
 
   const opponentName = opponent?.name || "Opponent";
+  const opponentPhotoUrl = opponent?.photoPath ? `/api/uploads/${opponent.photoPath}` : null;
 
   const [opponentMemo] = await db
     .select({ analysis: memos.analysis })
@@ -79,7 +88,9 @@ export default async function DebatePage({
       roomUrl={pairing.debateRoomUrl || ""}
       studentRole={isStudentA ? "A" : "B"}
       studentName={session.user.name}
+      studentPhotoUrl={myPhotoUrl}
       opponentName={opponentName}
+      opponentPhotoUrl={opponentPhotoUrl}
       opponentThesis={opponentThesis}
       opponentClaims={opponentClaims}
     />

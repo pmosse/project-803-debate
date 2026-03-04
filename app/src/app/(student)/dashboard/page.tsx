@@ -1,12 +1,13 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { assignments, memos, pairings, classMemberships, assignmentEnrollments, type Assignment } from "@/lib/db/schema";
+import { assignments, memos, pairings, classMemberships, assignmentEnrollments, users, type Assignment } from "@/lib/db/schema";
 import { eq, or, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FileText, Calendar } from "lucide-react";
+import { PhotoUpload } from "@/components/student/photo-upload";
 
 function getStudentStatus(
   memo: { status: string } | undefined,
@@ -22,6 +23,15 @@ function getStudentStatus(
 export default async function StudentDashboard() {
   const session = await auth();
   if (!session) redirect("/login");
+
+  // Get user record for photo
+  const [user] = await db
+    .select({ photoPath: users.photoPath })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
+  const photoUrl = user?.photoPath ? `/api/uploads/${user.photoPath}` : null;
 
   // Get student's class memberships
   const studentMemberships = await db
@@ -89,6 +99,17 @@ export default async function StudentDashboard() {
 
   return (
     <div>
+      {/* Profile header */}
+      <div className="mb-6 flex items-center gap-4">
+        <PhotoUpload name={session.user.name} photoUrl={photoUrl} />
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">{session.user.name}</h2>
+          {session.user.email && (
+            <p className="text-sm text-gray-500">{session.user.email}</p>
+          )}
+        </div>
+      </div>
+
       <h1 className="mb-6 text-2xl font-bold text-gray-900">My Assignments</h1>
 
       {assignmentCards.length === 0 ? (
