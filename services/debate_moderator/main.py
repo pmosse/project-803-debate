@@ -97,6 +97,44 @@ def save_transcript(session_id: str, transcript: list):
         conn.close()
 
 
+def complete_session(session_id: str, duration_seconds: int):
+    """Mark debate session and its pairing as completed, trigger evaluation."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # Only complete if currently active (avoid double-completing)
+        cur.execute(
+            "UPDATE debate_sessions SET status = 'completed', ended_at = NOW(), duration_seconds = %s WHERE id = %s AND status = 'active' RETURNING pairing_id",
+            (duration_seconds, session_id),
+        )
+        row = cur.fetchone()
+        if row:
+            pairing_id = row[0]
+            cur.execute(
+                "UPDATE pairings SET status = 'completed' WHERE id = %s",
+                (pairing_id,),
+            )
+        conn.commit()
+
+        # Trigger evaluation
+        if row:
+            evaluator_url = os.getenv("EVALUATOR_URL", "http://localhost:8005")
+            try:
+                import urllib.request
+                req = urllib.request.Request(
+                    f"{evaluator_url}/evaluate",
+                    data=json.dumps({"debate_session_id": session_id}).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=5)
+            except Exception as e:
+                print(f"Evaluator trigger failed: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+
 async def broadcast(session_id: str, message: dict, exclude: WebSocket | None = None):
     """Send a message to all connections in a session."""
     session = sessions.get(session_id)
@@ -431,6 +469,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     duration_seconds=duration,
                     assignment_id=session.get("assignment_id"),
                 )
+            # Auto-complete session if it had meaningful activity
+            if len(session["transcript"]) > 0 and duration > 30:
+                complete_session(session_id, round(duration))
             del sessions[session_id]
 
 
