@@ -1,55 +1,41 @@
 # Project 803 — AI-Moderated Debate Platform
 
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![Anthropic](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-D97706?logo=anthropic&logoColor=white)
+![Deepgram](https://img.shields.io/badge/Deepgram-Nova--3-13EF93)
+![Daily.co](https://img.shields.io/badge/Daily.co-WebRTC-1F2937)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
+![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F)
+![PM2](https://img.shields.io/badge/PM2-Process%20Manager-2B037A)
+![License](https://img.shields.io/badge/License-Private-red)
+
 A live oral debate platform where university students defend their written memos in structured, AI-moderated video debates. Built for ECON 803 at Columbia University.
 
 Students upload position memos on assigned readings, get paired with an opponent who argued the opposite side, and debate live on video. An AI moderator listens in real time — fact-checking claims against the readings, suggesting follow-up questions, and providing personalized feedback after the debate.
 
-## Architecture
-
-```
-Next.js App (port 3000)
-  App Router · NextAuth · Drizzle ORM · Tailwind
-  ─────────────────────────────────────────────────
-Python Services
-  memo_processor (8001)     reading_indexer (8002)
-  pymupdf4llm + Claude      MiniLM + pgvector
-
-  pairing_engine (8003)     debate_moderator (8004)
-  greedy matching            Deepgram + Claude (WS)
-
-  evaluator (8005)
-  Claude Sonnet scoring
-  ─────────────────────────────────────────────────
-Infrastructure
-  PostgreSQL 17 (pgvector) · Redis · MinIO
-```
-
-### Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 15 (App Router), React, Tailwind CSS, shadcn/ui |
-| Auth | NextAuth v5 (credentials provider) |
-| Database | PostgreSQL 17 with pgvector, Drizzle ORM |
-| Video | Daily.co (WebRTC) |
-| Speech-to-Text | Deepgram Nova-3 (streaming WebSocket) |
-| AI Moderation | Claude Haiku 4.5 (real-time), Claude Sonnet 4.5 (evaluation) |
-| RAG | sentence-transformers (MiniLM) embeddings + pgvector similarity search |
-| PDF Processing | pymupdf4llm |
-| File Storage | MinIO (S3-compatible) |
-| Process Manager | PM2 |
-| Tunneling | Cloudflare Quick Tunnels (WebSocket proxy for moderator) |
-
 ## How It Works
 
-### 1. Memo Upload & Analysis
-Students upload a position memo (PDF). The memo processor extracts text, then Claude analyzes it to identify the thesis, key claims, citations, and stance (net positive/negative).
+```
+Professor creates assignment (prompt, rubric, readings, deadlines)
+        ↓
+Students sign up → verify email → set availability → upload PDF memo
+        ↓
+AI analyzes memo (Claude Haiku) → extracts position, thesis, key claims
+        ↓
+Student confirms detected position
+        ↓
+Professor generates AI pairings (Claude Sonnet) → sends debate invitations
+        ↓
+Students debate (~13 min, 4 phases, real-time AI moderation)
+        ↓
+AI auto-evaluates (Claude Sonnet) → scores + narrative summary
+        ↓
+Professor reviews results → exports CSV
+```
 
-### 2. Pairing
-The pairing engine matches students with opposing positions, maximizing argument diversity. Each pair gets a Daily.co video room.
-
-### 3. Live Debate (~13 min)
-Four phases, each timed:
+## Debate Structure
 
 | Phase | Duration | Description |
 |-------|----------|-------------|
@@ -60,16 +46,72 @@ Four phases, each timed:
 
 During the debate:
 - **Real-time transcription** via Deepgram streams through a WebSocket
-- **AI moderator** listens in all phases with phase-specific behavior (e.g., only flags factual errors during openings, actively suggests follow-ups during cross-exam)
+- **AI moderator** listens with phase-specific behavior (flags factual errors, suggests follow-ups, nudges silence)
 - **Fact-checking** against indexed reading passages using RAG
-- **Silence detection** nudges speakers after 15s of inactivity
-- **Phase prompts** provide contextual guidance at each transition
-- **Phase summaries** — AI-generated ~50 word recap shown in the ready check overlay between phases so students can review key arguments before continuing
+- **Phase summaries** — AI-generated recap shown between phases so students can review key arguments
+- Students can **pause**, **+1 min** to extend, or **skip** to the next phase
 
-### 4. Post-Debate
-- Personalized AI debrief (what went well, what to improve)
-- Claude Sonnet evaluates each student on reading accuracy, evidence use, rebuttal quality
-- Instructor reviews transcripts, scores, and AI summaries
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Next.js App (3000)                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────┐  │
+│  │ Student  │  │Professor │  │  Admin   │  │  API Routes│  │
+│  │  Pages   │  │  Pages   │  │  Pages   │  │            │  │
+│  └──────────┘  └──────────┘  └──────────┘  └────────────┘  │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+        ┌──────────────┼──────────────────┐
+        ▼              ▼                  ▼
+┌──────────────┐ ┌───────────┐  ┌──────────────┐
+│memo_processor│ │  debate   │  │  evaluator   │
+│  (8001)      │ │ moderator │  │   (8005)     │
+│ PDF + Claude │ │  (8004)   │  │Claude Sonnet │
+│    Haiku     │ │ WS+Haiku  │  │  scoring     │
+└──────────────┘ └─────┬─────┘  └──────────────┘
+                       │
+              ┌────────┼────────┐
+              ▼        ▼        ▼
+          Daily.co  Deepgram  PostgreSQL
+          (WebRTC)  (Nova-3)
+```
+
+## AI Models
+
+| Task | Model | Service |
+|------|-------|---------|
+| Memo analysis | Claude Haiku | memo_processor (8001) |
+| Pairing | Claude Sonnet | Next.js API |
+| Live moderation | Claude Haiku | debate_moderator (8004) |
+| Phase summaries | Claude Haiku | debate_moderator (8004) |
+| Evaluation & scoring | Claude Sonnet | evaluator (8005) |
+| Student debrief | Claude Haiku | Next.js API |
+| Speech-to-text | Deepgram Nova-3 | Daily.co integration |
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15 (App Router), React 19, Tailwind CSS, Zustand, shadcn/ui |
+| Auth | NextAuth v5 (JWT, email-code + password providers) |
+| Database | PostgreSQL 17 with pgvector, Drizzle ORM |
+| Video | Daily.co (WebRTC) |
+| Speech-to-Text | Deepgram Nova-3 (streaming WebSocket) |
+| AI | Claude Haiku (real-time), Claude Sonnet (evaluation + pairing) |
+| RAG | sentence-transformers (MiniLM) embeddings + pgvector |
+| PDF Processing | pymupdf4llm |
+| Email | Resend |
+| Storage | Local filesystem (S3-compatible fallback) |
+| Process Manager | PM2 |
+
+## Roles
+
+| Role | Capabilities |
+|------|-------------|
+| **Student** | Sign up, upload memo, debate, receive scores, upload profile photo |
+| **Professor** | Create assignments, review memos, generate pairings, review evaluations, export CSV |
+| **Super Admin** | Manage classes, professor accounts, system-wide monitoring + all professor features |
 
 ## Local Development
 
@@ -85,10 +127,10 @@ During the debate:
 docker compose up -d
 
 # Install dependencies
-pnpm install
+cd app && pnpm install
 
 # Push database schema
-cd app && pnpm db:push
+pnpm db:push
 
 # Seed test data
 cd ../scripts && npm run seed
@@ -102,26 +144,13 @@ cd ../app && pnpm dev
 Create `app/.env.local`:
 
 ```env
-# Database
 DATABASE_URL=postgresql://debates:debates@localhost:5433/debates
-
-# Auth
 NEXTAUTH_SECRET=your-secret-here
 NEXTAUTH_URL=http://localhost:3000
-
-# Daily.co
 DAILY_API_KEY=your-daily-api-key
-
-# AI
 ANTHROPIC_API_KEY=your-anthropic-api-key
-
-# Speech-to-text
 DEEPGRAM_API_KEY=your-deepgram-api-key
-
-# Moderator WebSocket (use ws:// for local, wss:// for tunneled)
 NEXT_PUBLIC_DEBATE_MODERATOR_URL=ws://localhost:8004
-
-# Services
 MEMO_PROCESSOR_URL=http://localhost:8001
 READING_INDEXER_URL=http://localhost:8002
 PAIRING_ENGINE_URL=http://localhost:8003
@@ -135,18 +164,16 @@ EVALUATOR_URL=http://localhost:8005
 |------|-------|----------|
 | Professor | smith@columbia.edu | instructor123 |
 | Admin | admin@columbia.edu | admin123 |
-| Students | (use name + course code) | ECON803 |
 
 ## Testing
 
 ```bash
-# Run all debate moderator tests (unit + integration with real Claude API)
 cd services/debate_moderator
 python -m pytest test_phase_summary.py test_integration.py -v -s
 ```
 
 - **Unit tests** (`test_phase_summary.py`) — Mocked Claude API, tests phase summary generation logic
-- **Integration tests** (`test_integration.py`) — Real Claude API calls over the full WebSocket pipeline: connection/sync, transcript broadcast, AI moderation, phase prompts, phase summaries, ready checks, and phase advancement
+- **Integration tests** (`test_integration.py`) — Real Claude API calls over the full WebSocket pipeline
 - Requires `ANTHROPIC_API_KEY` in root `.env`; auto-skips if not set
 
 ## Project Structure
@@ -156,22 +183,24 @@ debates/
 ├── app/                          # Next.js application
 │   └── src/
 │       ├── app/                  # App Router pages & API routes
-│       │   ├── (auth)/           # Login
 │       │   ├── (student)/        # Student pages (dashboard, debate, assignment)
 │       │   ├── professor/        # Professor pages
 │       │   ├── admin/            # Super admin pages
+│       │   ├── signup/           # Student signup flow
 │       │   └── api/              # API routes
 │       ├── components/           # React components
-│       │   ├── debate/           # Debate session, AI coach, timer, debrief
-│       │   ├── instructor/       # Professor/admin tools
+│       │   ├── debate/           # Debate session, video, phases, debrief
+│       │   ├── student/          # Memo upload, photo upload, position confirmation
+│       │   ├── instructor/       # Rubric builder, evaluation display
 │       │   └── ui/               # shadcn/ui primitives
-│       └── lib/                  # Auth, DB, hooks, utilities
+│       └── lib/                  # Auth, DB, hooks, storage, email
 ├── services/                     # Python microservices
-│   ├── memo_processor/           # PDF extraction + Claude analysis
-│   ├── reading_indexer/          # Embedding + vector search
-│   ├── pairing_engine/           # Student matching algorithm
-│   ├── debate_moderator/         # Real-time AI moderation + STT
-│   └── evaluator/                # Post-debate scoring
+│   ├── memo_processor/           # PDF extraction + Claude analysis (8001)
+│   ├── reading_indexer/          # Embedding + vector search (8002)
+│   ├── pairing_engine/           # Student matching algorithm (8003)
+│   ├── debate_moderator/         # Real-time AI moderation + STT (8004)
+│   ├── evaluator/                # Post-debate scoring (8005)
+│   └── shared/                   # Shared utilities
 ├── scripts/                      # Seed data
 ├── docker-compose.yml            # Local Postgres, Redis, MinIO
 └── ecosystem.config.cjs          # PM2 process config (production)
