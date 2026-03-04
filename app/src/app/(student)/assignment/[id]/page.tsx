@@ -101,7 +101,7 @@ export default async function AssignmentDetail({
               Your Memo
               <div className="flex items-center gap-2">
                 {memo && <StatusBadge status={memo.status} />}
-                {memo && <MemoDeleteButton memoId={memo.id} />}
+                {memo && memo.status !== "analyzed" && !pairing && <MemoDeleteButton memoId={memo.id} />}
               </div>
             </CardTitle>
           </CardHeader>
@@ -125,10 +125,56 @@ export default async function AssignmentDetail({
                 <MemoUpload assignmentId={assignment.id} />
               </div>
             ) : memo.status === "analyzed" && memo.studentConfirmed ? (
-              <p className="text-sm text-green-600">
-                Your memo has been analyzed and your position confirmed. You will
-                be paired with a classmate soon.
-              </p>
+              <div className="space-y-4">
+                <p className="text-sm text-green-600">
+                  {pairing
+                    ? "Your memo has been analyzed and your position confirmed. You've been paired — see your debate details below."
+                    : "Your memo has been analyzed and your position confirmed. You will be paired with a classmate soon."}
+                </p>
+                {memo.analysis && (
+                  <div className="rounded-md border border-gray-200 bg-gray-50 p-4 space-y-3">
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Position</p>
+                      <p className="text-sm text-gray-900 capitalize">{memo.positionBinary === "unclassified" ? "Unclassified" : memo.positionBinary?.replace("_", " ")}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Thesis</p>
+                      <p className="text-sm text-gray-900">{(memo.analysis as any).thesis}</p>
+                    </div>
+                    {(memo.analysis as any).key_claims?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Key Arguments</p>
+                        <ul className="mt-1 list-disc list-inside space-y-1">
+                          {(memo.analysis as any).key_claims.map((claim: string, i: number) => (
+                            <li key={i} className="text-sm text-gray-700">{claim}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {(memo.analysis as any).citations?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Citations</p>
+                        <ul className="mt-1 space-y-1">
+                          {(memo.analysis as any).citations.map((c: any, i: number) => (
+                            <li key={i} className="text-sm text-gray-700">
+                              <span className="font-medium">{c.reading}</span> — {c.how_used}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {memo.filePath && (
+                      <a
+                        href={`/api/memos/${memo.id}/download`}
+                        className="inline-flex items-center gap-1 text-sm text-[#1D4F91] hover:underline"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Download original PDF
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
               <MemoProcessingStatus status={memo.status} />
             )}

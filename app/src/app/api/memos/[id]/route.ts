@@ -64,6 +64,17 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Students cannot delete analyzed memos (professors still can)
+  if (
+    memo.status === "analyzed" &&
+    !isPrivilegedRole((session.user as any).role)
+  ) {
+    return NextResponse.json(
+      { error: "Cannot delete a memo that has already been analyzed" },
+      { status: 400 }
+    );
+  }
+
   await db.delete(memos).where(eq(memos.id, id));
 
   return NextResponse.json({ ok: true });

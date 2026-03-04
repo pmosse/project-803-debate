@@ -29,8 +29,17 @@ export function PairingControls({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [resetAllOpen, setResetAllOpen] = useState(false);
   const [resetPairingOpen, setResetPairingOpen] = useState<string | null>(null);
+  const [missingMemosOpen, setMissingMemosOpen] = useState(false);
 
   const studentMap = new Map(students.map((s) => [s.id, s]));
+
+  function handleGenerateClick() {
+    if (analyzedCount < students.length) {
+      setMissingMemosOpen(true);
+    } else {
+      handleGeneratePairings();
+    }
+  }
 
   async function handleGeneratePairings() {
     setLoading(true);
@@ -102,14 +111,14 @@ export function PairingControls({
             <div className="text-center">
               <Users className="mx-auto mb-4 h-12 w-12 text-gray-300" />
               <p className="mb-2 text-sm text-gray-500">
-                {analyzedCount} memos analyzed. Generate pairings using Claude AI to match
+                {analyzedCount}/{students.length} memos analyzed. Generate pairings using Claude AI to match
                 students by lines of argumentation.
               </p>
               <p className="mb-4 text-xs text-gray-400">
                 Students will be clustered by their specific arguments, not just their overall position.
               </p>
               <Button
-                onClick={handleGeneratePairings}
+                onClick={handleGenerateClick}
                 disabled={loading || analyzedCount < 2}
               >
                 {loading ? (
@@ -281,6 +290,16 @@ export function PairingControls({
         confirmLabel="Reset Pairing"
         variant="warning"
         onConfirm={() => handleResetPairing(resetPairingOpen!)}
+      />
+
+      <ConfirmDialog
+        open={missingMemosOpen}
+        onOpenChange={setMissingMemosOpen}
+        title="Not All Memos Analyzed"
+        description={`Only ${analyzedCount} out of ${students.length} students have analyzed memos. Students without analyzed memos will be excluded from pairings. Do you want to proceed anyway?`}
+        confirmLabel="Generate Anyway"
+        variant="warning"
+        onConfirm={async () => { await handleGeneratePairings(); }}
       />
     </div>
   );
