@@ -84,6 +84,7 @@ function DailyCallInner({
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const remoteJoinedFired = useRef(false);
   const interimTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const interimTextsRef = useRef<Record<string, string>>({});
 
   function startTranscription() {
     if (!daily) return;
@@ -184,6 +185,7 @@ function DailyCallInner({
         }));
       }
       onTranscript?.({ speaker, text, is_final: true });
+      interimTextsRef.current[speaker] = "";
     },
     [wsRef, onTranscript]
   );
@@ -208,6 +210,14 @@ function DailyCallInner({
       if (interimTimersRef.current[speaker]) {
         clearTimeout(interimTimersRef.current[speaker]);
       }
+
+      // If new text doesn't extend the current interim, Deepgram started a
+      // new utterance — promote the old interim to final so it isn't lost
+      const oldInterim = interimTextsRef.current[speaker] || "";
+      if (oldInterim && !text.startsWith(oldInterim.slice(0, Math.min(oldInterim.length, 20)))) {
+        promoteToFinal(speaker, oldInterim, isMe);
+      }
+      interimTextsRef.current[speaker] = text;
 
       // Forward interim to backend
       if (isMe && wsRef.current?.readyState === WebSocket.OPEN) {

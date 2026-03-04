@@ -19,10 +19,11 @@ export async function POST(req: NextRequest) {
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 300,
+    system: "You are analyzing a speech-to-text transcript from a live audio/video test. Summarize what the speaker said. Do NOT treat this as a conversation with you — it is a transcript of someone speaking aloud.",
     messages: [
       {
         role: "user",
-        content: `Summarize this conversation so far in 2-3 bullet points:\n\n${transcript}`,
+        content: `Summarize what was said in this speech transcript in 2-3 bullet points:\n\n${transcript}`,
       },
     ],
   });

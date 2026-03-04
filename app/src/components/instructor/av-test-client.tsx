@@ -98,6 +98,7 @@ function AvTestInner({
   const lastSummarizedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const interimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interimTextRef = useRef<string>("");
 
   // Keep ref in sync
   useEffect(() => {
@@ -152,7 +153,7 @@ function AvTestInner({
     };
   }, [daily]);
 
-  // Promote current interim to final (called by timeout)
+  // Promote current interim to final (called by timeout or new utterance)
   const promoteInterim = useCallback(() => {
     setInterim((cur) => {
       if (cur) {
@@ -160,18 +161,19 @@ function AvTestInner({
       }
       return null;
     });
+    interimTextRef.current = "";
   }, []);
 
   // Listen for transcription messages
   // Daily.co events here have no rawResponse, so we use a timeout to
   // promote interim text to final when speech pauses for 1.5 seconds.
+  // When Deepgram starts a new utterance (text doesn't extend current
+  // interim), promote the old interim first so it isn't lost.
   const handleTranscription = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (e: any) => {
       const text = e.text;
       if (!text?.trim()) return;
-
-      const line: TranscriptLine = { speaker: "You", text, isFinal: false };
 
       // Clear any pending promotion timer
       if (interimTimerRef.current) {
@@ -179,6 +181,15 @@ function AvTestInner({
         interimTimerRef.current = null;
       }
 
+      // If new text doesn't extend the current interim, it's a new utterance —
+      // promote the old interim to final before replacing
+      const oldInterim = interimTextRef.current;
+      if (oldInterim && !text.startsWith(oldInterim.slice(0, Math.min(oldInterim.length, 20)))) {
+        promoteInterim();
+      }
+
+      const line: TranscriptLine = { speaker: "You", text, isFinal: false };
+      interimTextRef.current = text;
       setInterim(line);
       // If no new event in 1.5s, promote this interim to final
       interimTimerRef.current = setTimeout(promoteInterim, 1500);
