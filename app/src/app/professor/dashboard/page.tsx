@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { assignments, assignmentEnrollments, memos } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,22 +12,43 @@ export default async function InstructorDashboard() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const allAssignments = await db
-    .select({
-      assignment: assignments,
-      studentCount: sql<number>`(
-        SELECT COUNT(DISTINCT ${assignmentEnrollments.studentId})
-        FROM ${assignmentEnrollments}
-        WHERE ${assignmentEnrollments.assignmentId} = ${assignments.id}
-      )`.as("student_count"),
-      memoCount: sql<number>`(
-        SELECT COUNT(*)
-        FROM ${memos}
-        WHERE ${memos.assignmentId} = ${assignments.id}
-      )`.as("memo_count"),
-    })
+  const assignmentRows = await db
+    .select()
     .from(assignments)
     .where(eq(assignments.createdBy, session.user.id));
+
+  const assignmentIds = assignmentRows.map((a) => a.id);
+
+  const enrollmentCounts = assignmentIds.length > 0
+    ? await db
+        .select({
+          assignmentId: assignmentEnrollments.assignmentId,
+          count: sql<number>`count(distinct ${assignmentEnrollments.studentId})`,
+        })
+        .from(assignmentEnrollments)
+        .where(inArray(assignmentEnrollments.assignmentId, assignmentIds))
+        .groupBy(assignmentEnrollments.assignmentId)
+    : [];
+
+  const memoCounts = assignmentIds.length > 0
+    ? await db
+        .select({
+          assignmentId: memos.assignmentId,
+          count: sql<number>`count(*)`,
+        })
+        .from(memos)
+        .where(inArray(memos.assignmentId, assignmentIds))
+        .groupBy(memos.assignmentId)
+    : [];
+
+  const enrollmentMap = Object.fromEntries(enrollmentCounts.map((e) => [e.assignmentId, Number(e.count)]));
+  const memoMap = Object.fromEntries(memoCounts.map((m) => [m.assignmentId, Number(m.count)]));
+
+  const allAssignments = assignmentRows.map((a) => ({
+    assignment: a,
+    studentCount: enrollmentMap[a.id] || 0,
+    memoCount: memoMap[a.id] || 0,
+  }));
 
   return (
     <div>
