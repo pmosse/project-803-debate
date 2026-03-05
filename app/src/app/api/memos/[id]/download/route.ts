@@ -34,7 +34,8 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const absolutePath = path.resolve(process.cwd(), memo.filePath);
+  const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+  const absolutePath = path.resolve(uploadDir, memo.filePath);
   const file = await readFile(absolutePath);
   const filename = path.basename(memo.filePath);
 
