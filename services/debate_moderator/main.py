@@ -460,13 +460,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             if session.get("ready_timeout_task"):
                 session["ready_timeout_task"].cancel()
             # Log Deepgram transcription usage
+            # Each client runs its own Deepgram stream, so total is 2x session duration
             duration = time.time() - session.get("session_start_time", time.time())
             if duration > 10:  # Only log if session lasted more than 10s
                 log_usage(
                     service="deepgram",
-                    model="deepgram",
+                    model="deepgram-nova-3",
                     call_type="transcription",
-                    duration_seconds=duration,
+                    duration_seconds=duration * 2,
                     assignment_id=session.get("assignment_id"),
                 )
             # Auto-complete session if it had meaningful activity

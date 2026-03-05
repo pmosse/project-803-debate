@@ -9,7 +9,7 @@ import {
   DailyVideo,
   DailyAudio,
 } from "@daily-co/daily-react";
-import { AlertTriangle, RefreshCw, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 interface TranscriptEvent {
   speaker: string;
@@ -118,28 +118,19 @@ function DailyCallInner({
   const [transcriptionReady, setTranscriptionReady] = useState(false);
   const remoteJoinedFired = useRef(false);
   const remotePresent = useRef(false);
-  const interimTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const interimTextsRef = useRef<Record<string, string>>({});
+  const dgWsRef = useRef<WebSocket | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const currentPhaseRef = useRef(currentPhase);
 
-  function startTranscription() {
-    if (!daily) return;
-    setTranscriptionError(null);
-    try {
-      daily.startTranscription({
-        language: "en",
-        model: "nova-2-general",
-        profanity_filter: false,
-        endpointing: 700,
-        punctuate: true,
-        extra: { interim_results: true, smart_format: true },
-      });
-    } catch (err) {
-      console.error("Transcription start failed:", err);
-      setTranscriptionError("Live transcription failed to start. AI coaching won't work until fixed.");
-    }
-  }
+  // Keep currentPhase ref in sync for use in Deepgram message handler
+  useEffect(() => {
+    currentPhaseRef.current = currentPhase;
+  }, [currentPhase]);
 
-  // Join on mount, start transcription, leave on unmount
+  const mySpeakerLabel = studentRole === "A" ? "Student A" : "Student B";
+
+  // Join Daily.co for video only (no transcription through Daily)
   useEffect(() => {
     if (!daily) return;
 
@@ -150,7 +141,6 @@ function DailyCallInner({
       .then(() => {
         if (cancelled) return;
         setJoinError(null);
-        startTranscription();
       })
       .catch((err: Error) => {
         if (!cancelled) {
@@ -169,33 +159,133 @@ function DailyCallInner({
     };
   }, [daily]);
 
-  // Listen for transcription-started and transcription errors from Daily.co
+  // Start direct Deepgram transcription
   useEffect(() => {
-    if (!daily) return;
+    let cancelled = false;
 
-    const handleTranscriptionStarted = () => {
-      setTranscriptionReady(true);
-    };
+    async function startDeepgram() {
+      try {
+        const res = await fetch("/api/deepgram-token");
+        if (!res.ok) {
+          setTranscriptionError("Failed to get transcription credentials");
+          return;
+        }
+        const { key } = await res.json();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleTranscriptionError = (e: any) => {
-      console.error("Transcription error:", e);
-      setTranscriptionError(
-        e?.errorMsg || "Live transcription encountered an error. AI coaching may not work."
-      );
-    };
+        // Get mic audio stream
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        micStreamRef.current = stream;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (daily as any).on("transcription-started", handleTranscriptionStarted);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (daily as any).on("transcription-error", handleTranscriptionError);
+        // Connect to Deepgram WebSocket directly
+        const params = new URLSearchParams({
+          model: "nova-3",
+          language: "en",
+          punctuate: "true",
+          interim_results: "true",
+          endpointing: "700",
+          smart_format: "true",
+          utterance_end_ms: "2500",
+          vad_events: "true",
+        });
+        const dgWs = new WebSocket(
+          `wss://api.deepgram.com/v1/listen?${params}`,
+          ["token", key]
+        );
+        dgWsRef.current = dgWs;
+
+        dgWs.onopen = () => {
+          if (cancelled) {
+            dgWs.close();
+            return;
+          }
+          setTranscriptionReady(true);
+
+          // Start sending audio via MediaRecorder
+          const recorder = new MediaRecorder(stream, {
+            mimeType: "audio/webm;codecs=opus",
+          });
+          recorderRef.current = recorder;
+
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0 && dgWs.readyState === WebSocket.OPEN) {
+              dgWs.send(e.data);
+            }
+          };
+          recorder.start(250); // 250ms chunks
+        };
+
+        dgWs.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "Results") {
+            const alt = data.channel?.alternatives?.[0];
+            if (!alt?.transcript) return;
+
+            const text = alt.transcript.trim();
+            if (!text) return;
+            const isFinal = data.is_final;
+
+            if (isFinal) {
+              // Send final transcript to backend via moderator WebSocket
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                  type: "transcript_text",
+                  speaker: mySpeakerLabel,
+                  text,
+                  is_final: true,
+                }));
+              }
+              onTranscript?.({ speaker: mySpeakerLabel, text, is_final: true });
+            } else {
+              // Send interim to backend for real-time display
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                  type: "transcript_text",
+                  speaker: mySpeakerLabel,
+                  text,
+                  is_final: false,
+                }));
+              }
+              onTranscript?.({ speaker: mySpeakerLabel, text, is_final: false });
+            }
+          }
+        };
+
+        dgWs.onerror = () => {
+          setTranscriptionError("Deepgram connection error. AI coaching may not work.");
+        };
+
+        dgWs.onclose = () => {
+          if (!cancelled) {
+            setTranscriptionReady(false);
+          }
+        };
+      } catch (err) {
+        console.error("Deepgram setup failed:", err);
+        setTranscriptionError("Failed to start transcription. Check mic permissions.");
+      }
+    }
+
+    startDeepgram();
+
     return () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (daily as any).off("transcription-started", handleTranscriptionStarted);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (daily as any).off("transcription-error", handleTranscriptionError);
+      cancelled = true;
+      recorderRef.current?.stop();
+      recorderRef.current = null;
+      if (dgWsRef.current?.readyState === WebSocket.OPEN) {
+        dgWsRef.current.send(JSON.stringify({ type: "CloseStream" }));
+        dgWsRef.current.close();
+      }
+      dgWsRef.current = null;
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
     };
-  }, [daily]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fire onRemoteJoined only when both remote participant is present AND transcription is ready
   useEffect(() => {
@@ -212,6 +302,12 @@ function DailyCallInner({
   useEffect(() => {
     if (!daily) return;
     daily.setLocalAudio(micEnabled && transcriptionReady);
+    // Also mute/unmute the Deepgram mic stream
+    if (micStreamRef.current) {
+      micStreamRef.current.getAudioTracks().forEach((t) => {
+        t.enabled = micEnabled && transcriptionReady;
+      });
+    }
   }, [daily, micEnabled, transcriptionReady]);
 
   useEffect(() => {
@@ -219,80 +315,9 @@ function DailyCallInner({
     daily.setLocalVideo(camEnabled);
   }, [daily, camEnabled]);
 
-  // Promote a speaker's interim text to final after a silence gap
-  const promoteToFinal = useCallback(
-    (speaker: string, text: string, isMe: boolean) => {
-      if (isMe && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: "transcript_text",
-          speaker,
-          text,
-          is_final: true,
-        }));
-      }
-      onTranscript?.({ speaker, text, is_final: true });
-      interimTextsRef.current[speaker] = "";
-    },
-    [wsRef, onTranscript]
-  );
-
-  // Listen for Daily.co built-in transcription events
-  // Daily.co events lack rawResponse, so we use a 1.5s silence timeout
-  // to promote interim text to final for each speaker.
-  useEffect(() => {
-    if (!daily || !localSessionId) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleTranscriptionMessage = (e: any) => {
-      const text = e.text;
-      if (!text?.trim()) return;
-
-      const isMe = e.participantId === localSessionId;
-      const speaker = isMe
-        ? (studentRole === "A" ? "Student A" : "Student B")
-        : (studentRole === "A" ? "Student B" : "Student A");
-
-      // Clear pending timer for this speaker
-      if (interimTimersRef.current[speaker]) {
-        clearTimeout(interimTimersRef.current[speaker]);
-      }
-
-      // If new text doesn't extend the current interim, Deepgram started a
-      // new utterance — promote the old interim to final so it isn't lost
-      const oldInterim = interimTextsRef.current[speaker] || "";
-      if (oldInterim && !text.startsWith(oldInterim.slice(0, Math.min(oldInterim.length, 20)))) {
-        promoteToFinal(speaker, oldInterim, isMe);
-      }
-      interimTextsRef.current[speaker] = text;
-
-      // Forward interim to backend
-      if (isMe && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: "transcript_text",
-          speaker,
-          text,
-          is_final: false,
-        }));
-      }
-
-      // Update local UI with interim
-      onTranscript?.({ speaker, text, is_final: false });
-
-      // After 2.5s of silence, promote to final (longer gap = more complete sentences)
-      interimTimersRef.current[speaker] = setTimeout(
-        () => promoteToFinal(speaker, text, isMe),
-        2500
-      );
-    };
-
-    daily.on("transcription-message", handleTranscriptionMessage);
-    return () => {
-      daily.off("transcription-message", handleTranscriptionMessage);
-      // Clear all pending timers on cleanup
-      Object.values(interimTimersRef.current).forEach(clearTimeout);
-      interimTimersRef.current = {};
-    };
-  }, [daily, localSessionId, studentRole, wsRef, onTranscript, promoteToFinal]);
+  // Handle opponent's transcript relayed via backend WebSocket
+  // (opponent's Deepgram runs on their client; backend broadcasts to us)
+  // This is handled in debate-session.tsx's ws.onmessage for type "transcript"
 
   const remoteId = remoteIds[0] ?? null;
 
@@ -334,8 +359,8 @@ function DailyCallInner({
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm">
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-white" />
-            <p className="mt-3 text-sm font-medium text-white">Starting live transcription...</p>
-            <p className="mt-1 text-xs text-gray-400">This takes about 15 seconds</p>
+            <p className="mt-3 text-sm font-medium text-white">Connecting to Deepgram Nova-3...</p>
+            <p className="mt-1 text-xs text-gray-400">This should only take a few seconds</p>
           </div>
         </div>
       )}
@@ -344,13 +369,6 @@ function DailyCallInner({
         <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-amber-500/90 px-3 py-2 text-sm text-white backdrop-blur-sm">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span className="flex-1">{transcriptionError}</span>
-          <button
-            onClick={() => startTranscription()}
-            className="flex shrink-0 items-center gap-1 rounded bg-white/20 px-2.5 py-1 text-xs font-medium hover:bg-white/30"
-          >
-            <RefreshCw className="h-3 w-3" />
-            Retry
-          </button>
         </div>
       )}
       {/* Local video */}

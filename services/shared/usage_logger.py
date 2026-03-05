@@ -12,6 +12,7 @@ PRICING = {
     "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.0},
     # Deepgram (per second)
     "deepgram": {"per_second": 0.0043},
+    "deepgram-nova-3": {"per_second": 0.0043},
 }
 
 
@@ -23,7 +24,7 @@ def _estimate_cost(
     duration_seconds: float | None,
 ) -> float:
     if service == "deepgram" and duration_seconds:
-        rate = PRICING.get("deepgram", {}).get("per_second", 0.0043)
+        rate = PRICING.get(model or "deepgram", PRICING.get("deepgram", {})).get("per_second", 0.0043)
         return duration_seconds * rate
 
     if model and model in PRICING:
