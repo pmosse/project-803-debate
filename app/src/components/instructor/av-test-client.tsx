@@ -86,6 +86,7 @@ function AvTestInner({
   const daily = useDaily();
   const localSessionId = useLocalSessionId();
   const [transcriptionReady, setTranscriptionReady] = useState(false);
+  const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(false);
   const [camOn, setCamOn] = useState(true);
   const [finals, setFinals] = useState<TranscriptLine[]>([]);
@@ -97,8 +98,9 @@ function AvTestInner({
   const finalsRef = useRef<TranscriptLine[]>([]);
   const lastSummarizedCountRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const interimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const interimTextRef = useRef<string>("");
+  const dgWsRef = useRef<WebSocket | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
 
   // Keep ref in sync
   useEffect(() => {
@@ -112,7 +114,7 @@ function AvTestInner({
     }
   }, [finals, interim]);
 
-  // Join + start transcription
+  // Join Daily.co for video (no transcription through Daily)
   useEffect(() => {
     if (!daily) return;
     let cancelled = false;
@@ -121,14 +123,6 @@ function AvTestInner({
       .join()
       .then(() => {
         if (cancelled) return;
-        daily.startTranscription({
-          language: "en",
-          model: "nova-2-general",
-          profanity_filter: false,
-          endpointing: 700,
-          punctuate: true,
-          extra: { interim_results: true, smart_format: true },
-        });
       })
       .catch((err: Error) => {
         console.error("Join failed:", err);
@@ -140,79 +134,141 @@ function AvTestInner({
     };
   }, [daily]);
 
-  // Listen for transcription-started to know when Deepgram is ready
+  // Start direct Deepgram transcription
   useEffect(() => {
-    if (!daily) return;
-    const handleStarted = () => {
-      setTranscriptionReady(true);
-      setMicOn(true);
-    };
-    (daily as any).on("transcription-started", handleStarted);
-    return () => {
-      (daily as any).off("transcription-started", handleStarted);
-    };
-  }, [daily]);
+    let cancelled = false;
 
-  // Promote current interim to final (called by timeout or new utterance)
-  const promoteInterim = useCallback(() => {
-    setInterim((cur) => {
-      if (cur) {
-        setFinals((prev) => [...prev, { ...cur, isFinal: true }]);
+    async function startDeepgram() {
+      try {
+        // Get Deepgram API key from server
+        const res = await fetch("/api/professor/test-room/deepgram-token");
+        if (!res.ok) {
+          setTranscriptionError("Failed to get transcription credentials");
+          return;
+        }
+        const { key } = await res.json();
+
+        // Get mic audio stream
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        micStreamRef.current = stream;
+
+        // Connect to Deepgram WebSocket
+        const params = new URLSearchParams({
+          model: "nova-3",
+          language: "en",
+          punctuate: "true",
+          interim_results: "true",
+          endpointing: "700",
+          smart_format: "true",
+          utterance_end_ms: "2500",
+          vad_events: "true",
+        });
+        const dgWs = new WebSocket(
+          `wss://api.deepgram.com/v1/listen?${params}`,
+          ["token", key]
+        );
+        dgWsRef.current = dgWs;
+
+        dgWs.onopen = () => {
+          if (cancelled) {
+            dgWs.close();
+            return;
+          }
+          setTranscriptionReady(true);
+          setMicOn(true);
+
+          // Start sending audio via MediaRecorder
+          const recorder = new MediaRecorder(stream, {
+            mimeType: "audio/webm;codecs=opus",
+          });
+          recorderRef.current = recorder;
+
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0 && dgWs.readyState === WebSocket.OPEN) {
+              dgWs.send(e.data);
+            }
+          };
+          recorder.start(250); // 250ms chunks
+        };
+
+        dgWs.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          // Handle transcription results
+          if (data.type === "Results") {
+            const alt = data.channel?.alternatives?.[0];
+            if (!alt?.transcript) return;
+
+            const text = alt.transcript.trim();
+            if (!text) return;
+            const isFinal = data.is_final;
+
+            if (isFinal) {
+              // Deepgram says this utterance is final — commit it
+              setInterim(null);
+              setFinals((prev) => [
+                ...prev,
+                { speaker: "You", text, isFinal: true },
+              ]);
+            } else {
+              // Interim result — show as in-progress
+              setInterim({ speaker: "You", text, isFinal: false });
+            }
+          }
+        };
+
+        dgWs.onerror = () => {
+          setTranscriptionError("Deepgram connection error. Transcription may not work.");
+        };
+
+        dgWs.onclose = () => {
+          // Only set error if we didn't intentionally close
+          if (!cancelled) {
+            setTranscriptionReady(false);
+          }
+        };
+      } catch (err) {
+        console.error("Deepgram setup failed:", err);
+        setTranscriptionError("Failed to start transcription. Check mic permissions.");
       }
-      return null;
-    });
-    interimTextRef.current = "";
+    }
+
+    startDeepgram();
+
+    return () => {
+      cancelled = true;
+      recorderRef.current?.stop();
+      recorderRef.current = null;
+      if (dgWsRef.current?.readyState === WebSocket.OPEN) {
+        // Send close signal to Deepgram
+        dgWsRef.current.send(JSON.stringify({ type: "CloseStream" }));
+        dgWsRef.current.close();
+      }
+      dgWsRef.current = null;
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    };
   }, []);
 
-  // Listen for transcription messages
-  // Daily.co events here have no rawResponse, so we use a timeout to
-  // promote interim text to final when speech pauses for 1.5 seconds.
-  // When Deepgram starts a new utterance (text doesn't extend current
-  // interim), promote the old interim first so it isn't lost.
-  const handleTranscription = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (e: any) => {
-      const text = e.text;
-      if (!text?.trim()) return;
-
-      // Clear any pending promotion timer
-      if (interimTimerRef.current) {
-        clearTimeout(interimTimerRef.current);
-        interimTimerRef.current = null;
-      }
-
-      // If new text doesn't extend the current interim, it's a new utterance —
-      // promote the old interim to final before replacing
-      const oldInterim = interimTextRef.current;
-      if (oldInterim && !text.startsWith(oldInterim.slice(0, Math.min(oldInterim.length, 20)))) {
-        promoteInterim();
-      }
-
-      const line: TranscriptLine = { speaker: "You", text, isFinal: false };
-      interimTextRef.current = text;
-      setInterim(line);
-      // If no new event in 2.5s, promote this interim to final
-      interimTimerRef.current = setTimeout(promoteInterim, 2500);
-    },
-    [promoteInterim]
-  );
-
-  useEffect(() => {
-    if (!daily) return;
-    daily.on("transcription-message", handleTranscription);
-    return () => {
-      daily.off("transcription-message", handleTranscription);
-    };
-  }, [daily, handleTranscription]);
-
-  // Mic/cam toggles
-  useEffect(() => {
-    daily?.setLocalAudio(micOn);
-  }, [daily, micOn]);
-
+  // Cam toggle
   useEffect(() => {
     daily?.setLocalVideo(camOn);
   }, [daily, camOn]);
+
+  // Mic toggle — control both Daily.co audio and MediaRecorder
+  useEffect(() => {
+    daily?.setLocalAudio(micOn);
+    // Mute/unmute the mic stream feeding Deepgram
+    if (micStreamRef.current) {
+      micStreamRef.current.getAudioTracks().forEach((t) => {
+        t.enabled = micOn;
+      });
+    }
+  }, [daily, micOn]);
 
   // Single interval: countdown + trigger summary (only runs once transcription is ready)
   useEffect(() => {
@@ -258,6 +314,12 @@ function AvTestInner({
   }, [transcriptionReady]);
 
   function handleEnd() {
+    recorderRef.current?.stop();
+    if (dgWsRef.current?.readyState === WebSocket.OPEN) {
+      dgWsRef.current.send(JSON.stringify({ type: "CloseStream" }));
+      dgWsRef.current.close();
+    }
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
     daily?.leave();
     onEnd();
   }
@@ -283,12 +345,19 @@ function AvTestInner({
           <div className="absolute bottom-2 left-2 rounded bg-black/50 px-2 py-1 text-xs text-white">
             You (Instructor)
           </div>
-          {!transcriptionReady && (
+          {!transcriptionReady && !transcriptionError && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900/70">
               <div className="text-center">
                 <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                <p className="mt-3 text-sm font-medium text-white">Starting transcription...</p>
-                <p className="mt-1 text-xs text-gray-400">This takes about 15 seconds</p>
+                <p className="mt-3 text-sm font-medium text-white">Connecting to Deepgram Nova-3...</p>
+                <p className="mt-1 text-xs text-gray-400">This should only take a few seconds</p>
+              </div>
+            </div>
+          )}
+          {transcriptionError && (
+            <div className="absolute inset-x-0 bottom-8 mx-4">
+              <div className="rounded bg-red-500/90 px-3 py-2 text-center text-xs text-white">
+                {transcriptionError}
               </div>
             </div>
           )}
@@ -329,8 +398,13 @@ function AvTestInner({
       <div className="flex flex-col gap-4">
         {/* Transcript */}
         <div className="overflow-hidden rounded-xl border bg-white">
-          <div className="border-b px-4 py-2">
+          <div className="flex items-center justify-between border-b px-4 py-2">
             <h2 className="text-sm font-semibold text-gray-700">Live Transcript</h2>
+            {transcriptionReady && (
+              <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                Nova-3 Direct
+              </span>
+            )}
           </div>
           <div
             ref={scrollRef}
