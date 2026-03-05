@@ -28,16 +28,12 @@ export function getPhaseInstructions(
 
   const instructions: Record<string, { you: string; opponent: string }> = {
     opening_a: {
-      you: opponentThesis
-        ? `Present your thesis and key arguments. Your opponent argues: "${opponentThesis}"`
-        : "Present your thesis and key arguments. Reference the assigned readings to support your position.",
+      you: "Present your thesis and key arguments. Reference the assigned readings to support your position.",
       opponent:
         "Listen carefully. Note claims you want to challenge during cross-examination.",
     },
     opening_b: {
-      you: opponentThesis
-        ? `Present your thesis and key arguments. Your opponent argues: "${opponentThesis}"`
-        : "Present your thesis and key arguments. Reference the assigned readings to support your position.",
+      you: "Present your thesis and key arguments. Reference the assigned readings to support your position.",
       opponent:
         "Listen carefully. Note claims you want to challenge during cross-examination.",
     },

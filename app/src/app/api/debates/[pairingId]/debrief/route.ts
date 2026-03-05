@@ -44,7 +44,7 @@ export async function GET(
     return NextResponse.json({ error: "No session found" }, { status: 404 });
   }
 
-  // Fetch both memos
+  // Fetch both memos and student names
   const studentMemos = await db
     .select({ studentId: memos.studentId, analysis: memos.analysis })
     .from(memos)
@@ -53,14 +53,29 @@ export async function GET(
   const memoA = studentMemos.find((m) => m.studentId === pairing.studentAId);
   const memoB = studentMemos.find((m) => m.studentId === pairing.studentBId);
 
-  const transcript = debateSession.transcript || [];
-  const transcriptText = transcript
-    .map((t) => `[${t.phase}] ${t.speaker}: ${t.text}`)
-    .join("\n");
+  // Get both student names for transcript personalization
+  const opponentId = isStudentA ? pairing.studentBId : pairing.studentAId;
+  const [opponent] = opponentId
+    ? await db.select({ name: users.name }).from(users).where(eq(users.id, opponentId)).limit(1)
+    : [null];
 
   const studentLabel = isStudentA ? "A" : "B";
   const studentName = session.user.name || `Student ${studentLabel}`;
   const firstName = studentName.split(" ")[0];
+  const opponentName = opponent?.name || `Student ${isStudentA ? "B" : "A"}`;
+  const opponentFirstName = opponentName.split(" ")[0];
+
+  // Replace generic labels with real names in transcript
+  const nameA = isStudentA ? firstName : opponentFirstName;
+  const nameB = isStudentA ? opponentFirstName : firstName;
+
+  const transcript = debateSession.transcript || [];
+  const transcriptText = transcript
+    .map((t) => {
+      const speaker = t.speaker === "Student A" ? nameA : t.speaker === "Student B" ? nameB : t.speaker;
+      return `[${t.phase}] ${speaker}: ${t.text}`;
+    })
+    .join("\n");
 
   try {
     const response = await anthropic.messages.create({
@@ -69,10 +84,10 @@ export async function GET(
       messages: [
         {
           role: "user",
-          content: `You are an AI debate coach. A university debate just finished. Generate a personalized debrief for ${studentName} (Student ${studentLabel} in the transcript).
+          content: `You are an AI debate coach. A university debate just finished. Generate a personalized debrief for ${studentName}.
 
-STUDENT A THESIS: ${memoA?.analysis?.thesis || "Unknown"}
-STUDENT B THESIS: ${memoB?.analysis?.thesis || "Unknown"}
+${nameA}'S THESIS: ${memoA?.analysis?.thesis || "Unknown"}
+${nameB}'S THESIS: ${memoB?.analysis?.thesis || "Unknown"}
 
 DEBATE TRANSCRIPT:
 ${transcriptText.slice(-3000)}

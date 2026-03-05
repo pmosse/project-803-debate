@@ -516,7 +516,7 @@ export function DebateSession({
     isActiveDebate && PHASE_CONFIG[store.phase].duration > 0 && !store.readyCheck;
 
   return (
-    <div className="flex h-[calc(100dvh)] flex-col bg-gray-900">
+    <div className="flex max-h-[100dvh] flex-col bg-gray-900">
       {/* Ready check overlay */}
       {store.readyCheck && (
         <ReadyCheckOverlay
@@ -667,21 +667,29 @@ export function DebateSession({
 
       {/* Leave confirmation */}
       {showLeaveConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold">Leave Debate?</h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Are you sure you want to leave? The debate will end for both
-              participants.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+              <PhoneOff className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">Leave Debate?</h3>
+            <p className="mt-2 text-sm text-gray-500">
+              The debate will end for both you and your opponent. Your progress
+              so far will be saved and evaluated.
             </p>
-            <div className="mt-4 flex gap-3">
+            <div className="mt-5 flex gap-3">
               <Button
                 variant="outline"
+                className="flex-1"
                 onClick={() => setShowLeaveConfirm(false)}
               >
-                Cancel
+                Stay
               </Button>
-              <Button variant="destructive" onClick={handleLeave}>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={handleLeave}
+              >
                 Leave Debate
               </Button>
             </div>
