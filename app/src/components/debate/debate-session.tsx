@@ -268,6 +268,17 @@ export function DebateSession({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Warn on browser tab close / navigation during active debate
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (store.phase !== "completed" && store.phase !== "waiting" && store.phase !== "consent") {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [store.phase]);
+
   // WebSocket for AI moderator
   useEffect(() => {
     if (!store.sessionId) return;
@@ -528,7 +539,7 @@ export function DebateSession({
           studentName={studentName}
           opponentName={opponentName}
           onReady={handleReadyClick}
-          onLeave={handleLeave}
+          onLeave={() => setShowLeaveConfirm(true)}
         />
       )}
 
