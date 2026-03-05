@@ -124,12 +124,19 @@ class Moderator:
         """Evaluate an utterance and decide whether to intervene."""
         reading_context = await self.get_reading_context(utterance)
 
-        transcript_text = "\n".join(
-            f"{t['speaker']}: {t['text']}" for t in recent_transcript
-        )
-
         first_a = self.student_a_name.split(" ")[0]
         first_b = self.student_b_name.split(" ")[0]
+
+        def label_to_name(speaker: str) -> str:
+            if speaker == "Student A":
+                return first_a
+            if speaker == "Student B":
+                return first_b
+            return speaker
+
+        transcript_text = "\n".join(
+            f"{label_to_name(t['speaker'])}: {t['text']}" for t in recent_transcript
+        )
         prompt = MODERATION_PROMPT.format(
             assignment_title=self.assignment_title,
             student_a_thesis=self.student_a_thesis,
@@ -168,10 +175,18 @@ class Moderator:
             print(f"Moderation error: {e}")
             return None
 
-    async def generate_phase_prompt(self, phase: str) -> str | None:
+    async def generate_phase_prompt(self, phase: str, recent_transcript: list[dict] | None = None) -> str | None:
         """Generate a contextual nudge for a phase transition."""
         first_a = self.student_a_name.split(" ")[0]
         first_b = self.student_b_name.split(" ")[0]
+
+        def label_to_name(speaker: str) -> str:
+            if speaker == "Student A":
+                return first_a
+            if speaker == "Student B":
+                return first_b
+            return speaker
+
         prompt = PHASE_PROMPT_TEMPLATE.format(
             phase=phase,
             student_a_thesis=self.student_a_thesis,
@@ -179,6 +194,21 @@ class Moderator:
             student_a_label=first_a,
             student_b_label=first_b,
         )
+
+        # For rebuttal phases, include the preceding cross-exam transcript
+        # so the AI can reference specific questions/points raised
+        if "rebuttal" in phase and recent_transcript:
+            crossexam_phase = "crossexam_a" if phase == "rebuttal_b" else "crossexam_b"
+            crossexam_entries = [t for t in recent_transcript if t.get("phase") == crossexam_phase]
+            if crossexam_entries:
+                crossexam_text = "\n".join(
+                    f"{label_to_name(t['speaker'])}: {t['text']}" for t in crossexam_entries[-8:]
+                )
+                prompt += (
+                    f"\n\nRECENT CROSS-EXAMINATION TRANSCRIPT:\n{crossexam_text}\n\n"
+                    f"Reference specific questions or challenges from the cross-examination "
+                    f"that the rebuttal speaker should address."
+                )
 
         try:
             response = client.messages.create(
@@ -254,8 +284,16 @@ class Moderator:
         first_a = self.student_a_name.split(" ")[0]
         first_b = self.student_b_name.split(" ")[0]
 
+        # Replace generic labels with actual names in transcript
+        def label_to_name(speaker: str) -> str:
+            if speaker == "Student A":
+                return first_a
+            if speaker == "Student B":
+                return first_b
+            return speaker
+
         transcript_text = "\n".join(
-            f"{t['speaker']}: {t['text']}" for t in phase_transcript
+            f"{label_to_name(t['speaker'])}: {t['text']}" for t in phase_transcript
         )
 
         prompt = (

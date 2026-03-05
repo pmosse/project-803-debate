@@ -297,7 +297,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
                 # Generate AI phase prompt on transition
                 if new_phase not in ("waiting", "consent", "completed"):
-                    phase_text = await session["moderator"].generate_phase_prompt(new_phase)
+                    phase_text = await session["moderator"].generate_phase_prompt(new_phase, session["transcript"])
                     if phase_text:
                         await broadcast(session_id, {
                             "type": "intervention",
@@ -358,7 +358,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                 "phase": np,
                             })
                             # Generate phase prompt for new phase
-                            phase_text = await s["moderator"].generate_phase_prompt(np)
+                            phase_text = await s["moderator"].generate_phase_prompt(np, s["transcript"])
                             if phase_text:
                                 await broadcast(session_id, {
                                     "type": "intervention",
@@ -409,7 +409,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
                         # Generate phase prompt for new phase
                         if next_phase not in ("waiting", "consent", "completed"):
-                            phase_text = await session["moderator"].generate_phase_prompt(next_phase)
+                            phase_text = await session["moderator"].generate_phase_prompt(next_phase, session["transcript"])
                             if phase_text:
                                 await broadcast(session_id, {
                                     "type": "intervention",

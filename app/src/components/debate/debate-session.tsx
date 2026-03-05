@@ -8,7 +8,7 @@ import { DebateDebrief } from "./debate-debrief";
 import { DailyCall } from "./daily-call";
 import { AiStrip } from "./ai-strip";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward, Clock, Pause, Play } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward, Clock, Pause, Play, MessageSquare, HelpCircle, Shield, Flag } from "lucide-react";
 import type { DebatePhase } from "@/lib/hooks/use-debate-store";
 import { Check, Bot, Loader2 } from "lucide-react";
 
@@ -21,6 +21,7 @@ function ReadyCheckOverlay({
   studentName,
   opponentName,
   onReady,
+  onLeave,
 }: {
   message: string;
   summary: string;
@@ -30,6 +31,7 @@ function ReadyCheckOverlay({
   studentName: string;
   opponentName: string;
   onReady: () => void;
+  onLeave: () => void;
 }) {
   const myReady = studentRole === "A" ? readyA : readyB;
   const theirReady = studentRole === "A" ? readyB : readyA;
@@ -87,14 +89,24 @@ function ReadyCheckOverlay({
           </div>
         </div>
 
-        <Button
-          onClick={onReady}
-          disabled={myReady || isLoading}
-          className="w-full"
-          size="lg"
-        >
-          {myReady ? `Waiting for ${theirFirst}...` : isLoading ? "Loading..." : "I'm Ready"}
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={onLeave}
+            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+            size="lg"
+          >
+            Leave Debate
+          </Button>
+          <Button
+            onClick={onReady}
+            disabled={myReady || isLoading}
+            className="flex-1"
+            size="lg"
+          >
+            {myReady ? `Waiting for ${theirFirst}...` : isLoading ? "Loading..." : "I'm Ready"}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -118,43 +130,49 @@ const PHASE_LABELS: Record<string, string> = {
   closing_b: "Closing B",
 };
 
+const PHASE_ICONS: Record<string, typeof MessageSquare> = {
+  opening_a: MessageSquare,
+  opening_b: MessageSquare,
+  crossexam_a: HelpCircle,
+  crossexam_b: HelpCircle,
+  rebuttal_a: Shield,
+  rebuttal_b: Shield,
+  closing_a: Flag,
+  closing_b: Flag,
+};
+
 function PhaseTimeline({ currentPhase, nameA, nameB }: { currentPhase: DebatePhase; nameA: string; nameB: string }) {
   const currentIdx = PHASE_ORDER.indexOf(currentPhase);
-  const truncate = (s: string) => s.length > 10 ? s.slice(0, 9) + "…" : s;
+  const truncate = (s: string) => s.length > 12 ? s.slice(0, 11) + "…" : s;
   const firstA = truncate(nameA.split(" ")[0]);
   const firstB = truncate(nameB.split(" ")[0]);
 
   return (
-    <div className="flex items-center justify-center gap-1 bg-white/95 border-b px-3 py-1.5">
+    <div className="flex items-center justify-center gap-1 bg-white/95 border-b px-3 py-2">
       {PHASE_ORDER.map((phase, idx) => {
         const isCompleted = currentIdx > idx;
         const isCurrent = currentIdx === idx;
         const label = (PHASE_LABELS[phase] || phase)
           .replace(/ A$/, ` ${firstA}`)
           .replace(/ B$/, ` ${firstB}`);
+        const Icon = PHASE_ICONS[phase] || MessageSquare;
 
         return (
           <div key={phase} className="flex items-center">
-            <div className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+            <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               isCurrent
                 ? "bg-[#1D4F91] text-white"
                 : isCompleted
                   ? "bg-green-100 text-green-700"
                   : "bg-gray-100 text-gray-400"
             }`}>
-              <div
-                className={`h-1.5 w-1.5 rounded-full ${
-                  isCurrent
-                    ? "bg-white"
-                    : isCompleted
-                      ? "bg-green-500"
-                      : "bg-gray-300"
-                }`}
-              />
+              <Icon className={`h-3 w-3 shrink-0 ${
+                isCurrent ? "text-white" : isCompleted ? "text-green-600" : "text-gray-400"
+              }`} />
               {label}
             </div>
             {idx < PHASE_ORDER.length - 1 && (
-              <div className={`mx-0.5 h-px w-2 ${isCompleted ? "bg-green-300" : "bg-gray-200"}`} />
+              <div className={`mx-0.5 h-px w-3 ${isCompleted ? "bg-green-300" : "bg-gray-200"}`} />
             )}
           </div>
         );
@@ -510,6 +528,7 @@ export function DebateSession({
           studentName={studentName}
           opponentName={opponentName}
           onReady={handleReadyClick}
+          onLeave={handleLeave}
         />
       )}
 
@@ -540,7 +559,7 @@ export function DebateSession({
       )}
 
       {/* Video area */}
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 max-h-[45vh]">
         {dailyToken && roomUrl ? (
           <DailyCall
             roomUrl={roomUrl}

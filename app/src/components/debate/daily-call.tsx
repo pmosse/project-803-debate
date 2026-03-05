@@ -9,7 +9,7 @@ import {
   DailyVideo,
   DailyAudio,
 } from "@daily-co/daily-react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, Loader2 } from "lucide-react";
 
 interface TranscriptEvent {
   speaker: string;
@@ -115,7 +115,9 @@ function DailyCallInner({
   const remoteIds = useParticipantIds({ filter: "remote" });
   const [joinError, setJoinError] = useState<string | null>(null);
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
+  const [transcriptionReady, setTranscriptionReady] = useState(false);
   const remoteJoinedFired = useRef(false);
+  const remotePresent = useRef(false);
   const interimTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const interimTextsRef = useRef<Record<string, string>>({});
 
@@ -124,7 +126,7 @@ function DailyCallInner({
     setTranscriptionError(null);
     try {
       daily.startTranscription({
-        language: "multi",
+        language: "en",
         model: "nova-2-general",
         profanity_filter: false,
         endpointing: 700,
@@ -167,9 +169,13 @@ function DailyCallInner({
     };
   }, [daily]);
 
-  // Listen for transcription errors from Daily.co
+  // Listen for transcription-started and transcription errors from Daily.co
   useEffect(() => {
     if (!daily) return;
+
+    const handleTranscriptionStarted = () => {
+      setTranscriptionReady(true);
+    };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleTranscriptionError = (e: any) => {
@@ -180,26 +186,33 @@ function DailyCallInner({
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (daily as any).on("transcription-started", handleTranscriptionStarted);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (daily as any).on("transcription-error", handleTranscriptionError);
     return () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (daily as any).off("transcription-started", handleTranscriptionStarted);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (daily as any).off("transcription-error", handleTranscriptionError);
     };
   }, [daily]);
 
-  // Fire onRemoteJoined when first remote participant appears
+  // Fire onRemoteJoined only when both remote participant is present AND transcription is ready
   useEffect(() => {
-    if (remoteIds.length > 0 && !remoteJoinedFired.current) {
+    if (remoteIds.length > 0) {
+      remotePresent.current = true;
+    }
+    if (remotePresent.current && transcriptionReady && !remoteJoinedFired.current) {
       remoteJoinedFired.current = true;
       onRemoteJoined?.();
     }
-  }, [remoteIds, onRemoteJoined]);
+  }, [remoteIds, transcriptionReady, onRemoteJoined]);
 
-  // Sync mic/cam state
+  // Sync mic/cam state — gate mic until transcription is ready
   useEffect(() => {
     if (!daily) return;
-    daily.setLocalAudio(micEnabled);
-  }, [daily, micEnabled]);
+    daily.setLocalAudio(micEnabled && transcriptionReady);
+  }, [daily, micEnabled, transcriptionReady]);
 
   useEffect(() => {
     if (!daily) return;
@@ -265,10 +278,10 @@ function DailyCallInner({
       // Update local UI with interim
       onTranscript?.({ speaker, text, is_final: false });
 
-      // After 1.5s of silence, promote to final
+      // After 2.5s of silence, promote to final (longer gap = more complete sentences)
       interimTimersRef.current[speaker] = setTimeout(
         () => promoteToFinal(speaker, text, isMe),
-        1500
+        2500
       );
     };
 
@@ -316,6 +329,16 @@ function DailyCallInner({
 
   return (
     <div className="relative grid h-full min-h-0 grid-cols-2 gap-2 overflow-hidden bg-gray-900 p-2">
+      {/* Transcription initializing overlay */}
+      {!transcriptionReady && !transcriptionError && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-900/70 backdrop-blur-sm">
+          <div className="text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-white" />
+            <p className="mt-3 text-sm font-medium text-white">Starting live transcription...</p>
+            <p className="mt-1 text-xs text-gray-400">This takes about 15 seconds</p>
+          </div>
+        </div>
+      )}
       {/* Transcription error banner */}
       {transcriptionError && (
         <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 bg-amber-500/90 px-3 py-2 text-sm text-white backdrop-blur-sm">

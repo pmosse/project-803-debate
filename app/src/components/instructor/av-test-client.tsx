@@ -122,7 +122,7 @@ function AvTestInner({
       .then(() => {
         if (cancelled) return;
         daily.startTranscription({
-          language: "multi",
+          language: "en",
           model: "nova-2-general",
           profanity_filter: false,
           endpointing: 700,
@@ -191,8 +191,8 @@ function AvTestInner({
       const line: TranscriptLine = { speaker: "You", text, isFinal: false };
       interimTextRef.current = text;
       setInterim(line);
-      // If no new event in 1.5s, promote this interim to final
-      interimTimerRef.current = setTimeout(promoteInterim, 1500);
+      // If no new event in 2.5s, promote this interim to final
+      interimTimerRef.current = setTimeout(promoteInterim, 2500);
     },
     [promoteInterim]
   );
