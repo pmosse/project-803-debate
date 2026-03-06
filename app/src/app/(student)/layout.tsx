@@ -22,9 +22,9 @@ export default async function StudentLayout({
               Project 803
             </span>
           </Link>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-white/70">{session.user.name}</span>
-            <SignOutButton className="flex items-center gap-1 text-sm text-white/50 hover:text-white/80 transition-colors" />
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <span className="text-sm text-white/70 truncate max-w-[120px] sm:max-w-none">{session.user.name}</span>
+            <SignOutButton className="flex items-center gap-1 text-sm text-white/50 hover:text-white/80 transition-colors shrink-0" />
           </div>
         </div>
       </header>

@@ -165,16 +165,16 @@ export function DebatePreviewClient() {
     isActiveDebate && PHASE_CONFIG[store.phase].duration > 0 && !store.readyCheck;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col -mx-4 md:mx-0">
       {/* Header banner */}
-      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-4">
+      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 sm:px-4 py-2 mb-3 sm:mb-4 mx-4 md:mx-0">
         <Eye className="h-4 w-4 text-amber-600 shrink-0" />
-        <p className="text-sm text-amber-800">
+        <p className="text-xs sm:text-sm text-amber-800">
           <strong>Debate Preview</strong> — This is a simulation of the student debate experience. No real video, audio, or AI moderation is running.
         </p>
       </div>
 
-      <div className="flex flex-col rounded-xl overflow-hidden shadow-md border border-gray-200 bg-gray-900">
+      <div className="flex flex-col md:rounded-xl md:overflow-hidden shadow-md md:border border-gray-200 bg-gray-900">
         {/* Ready check overlay */}
         {store.readyCheck && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -245,7 +245,7 @@ export function DebatePreviewClient() {
         )}
 
         {/* Mock video area */}
-        <div className="grid grid-cols-2 gap-2 p-3 min-h-[30vh] max-h-[40vh]">
+        <div className="grid grid-cols-2 gap-2 p-2 sm:p-3 min-h-[25vh] sm:min-h-[30vh] max-h-[40vh]">
           {/* Student A (You) */}
           <div className="flex flex-col items-center justify-center rounded-lg bg-gray-800 border border-gray-700">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#1D4F91] text-2xl font-bold text-white">
@@ -270,7 +270,7 @@ export function DebatePreviewClient() {
         </div>
 
         {/* Controls bar */}
-        <div className="flex items-center justify-center gap-3 bg-gray-900 px-4 py-2.5">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 bg-gray-900 px-3 sm:px-4 py-2 sm:py-2.5">
           <Button
             variant={micEnabled ? "outline" : "destructive"}
             size="icon"

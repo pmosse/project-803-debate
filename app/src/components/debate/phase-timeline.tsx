@@ -39,35 +39,37 @@ export function PhaseTimeline({ currentPhase, nameA, nameB }: { currentPhase: De
   const firstB = truncate(nameB.split(" ")[0]);
 
   return (
-    <div className="flex items-center justify-center gap-1 bg-white/95 border-b px-3 py-2">
-      {PHASE_ORDER.map((phase, idx) => {
-        const isCompleted = currentIdx > idx;
-        const isCurrent = currentIdx === idx;
-        const label = (PHASE_LABELS[phase] || phase)
-          .replace(/ A$/, ` ${firstA}`)
-          .replace(/ B$/, ` ${firstB}`);
-        const Icon = PHASE_ICONS[phase] || MessageSquare;
+    <div className="overflow-x-auto bg-white/95 border-b px-3 py-2 scrollbar-hide">
+      <div className="flex items-center justify-start sm:justify-center gap-1 min-w-max">
+        {PHASE_ORDER.map((phase, idx) => {
+          const isCompleted = currentIdx > idx;
+          const isCurrent = currentIdx === idx;
+          const label = (PHASE_LABELS[phase] || phase)
+            .replace(/ A$/, ` ${firstA}`)
+            .replace(/ B$/, ` ${firstB}`);
+          const Icon = PHASE_ICONS[phase] || MessageSquare;
 
-        return (
-          <div key={phase} className="flex items-center">
-            <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              isCurrent
-                ? "bg-[#1D4F91] text-white"
-                : isCompleted
-                  ? "bg-green-100 text-green-700"
-                  : "bg-gray-100 text-gray-400"
-            }`}>
-              <Icon className={`h-3 w-3 shrink-0 ${
-                isCurrent ? "text-white" : isCompleted ? "text-green-600" : "text-gray-400"
-              }`} />
-              {label}
+          return (
+            <div key={phase} className="flex items-center">
+              <div className={`flex items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-3 py-1 text-[11px] sm:text-xs font-medium whitespace-nowrap transition-colors ${
+                isCurrent
+                  ? "bg-[#1D4F91] text-white"
+                  : isCompleted
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gray-100 text-gray-400"
+              }`}>
+                <Icon className={`h-3 w-3 shrink-0 ${
+                  isCurrent ? "text-white" : isCompleted ? "text-green-600" : "text-gray-400"
+                }`} />
+                {label}
+              </div>
+              {idx < PHASE_ORDER.length - 1 && (
+                <div className={`mx-0.5 h-px w-3 ${isCompleted ? "bg-green-300" : "bg-gray-200"}`} />
+              )}
             </div>
-            {idx < PHASE_ORDER.length - 1 && (
-              <div className={`mx-0.5 h-px w-3 ${isCompleted ? "bg-green-300" : "bg-gray-200"}`} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

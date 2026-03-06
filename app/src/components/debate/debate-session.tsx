@@ -459,7 +459,7 @@ export function DebateSession({
     isActiveDebate && PHASE_CONFIG[store.phase].duration > 0 && !store.readyCheck;
 
   return (
-    <div className="flex max-h-[100dvh] flex-col bg-gray-900">
+    <div className="fixed inset-0 z-30 flex flex-col bg-gray-900">
       {/* Ready check overlay */}
       {store.readyCheck && (
         <ReadyCheckOverlay
@@ -542,7 +542,7 @@ export function DebateSession({
       </div>
 
       {/* Controls bar — mic, cam, +1min, skip, hangup */}
-      <div className="flex items-center justify-center gap-3 bg-gray-900 px-4 py-2.5">
+      <div className="flex items-center justify-center gap-2 sm:gap-3 bg-gray-900 px-3 sm:px-4 py-2 sm:py-2.5">
         <Button
           variant={micEnabled ? "outline" : "destructive"}
           size="icon"
