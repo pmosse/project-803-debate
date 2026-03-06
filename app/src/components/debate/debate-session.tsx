@@ -40,45 +40,45 @@ function ReadyCheckOverlay({
   const isLoading = !message;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
-        <div className="mb-4 flex items-center gap-2">
-          <Bot className="h-5 w-5 text-[#1D4F91]" />
-          <h3 className="text-lg font-semibold text-gray-900">Phase Transition</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md overflow-y-auto max-h-[90dvh] rounded-xl bg-white p-5 sm:p-6 shadow-2xl">
+        <div className="mb-3 flex items-center gap-2">
+          <Bot className="h-5 w-5 shrink-0 text-[#1D4F91]" />
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Phase Transition</h3>
         </div>
 
         {isLoading ? (
-          <div className="mb-5 text-sm text-gray-500">
+          <div className="mb-4 text-sm text-gray-500">
             Generating phase summary...
           </div>
         ) : (
           <>
             {summary && (
-              <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <div className="mb-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
                 <p className="text-sm text-blue-800 leading-relaxed">{summary}</p>
               </div>
             )}
-            <p className="mb-5 text-sm text-gray-600 leading-relaxed">{message}</p>
+            <p className="mb-4 text-sm text-gray-600 leading-relaxed">{message}</p>
           </>
         )}
 
-        <div className="mb-5 flex gap-3">
-          <div className={`flex-1 rounded-lg border-2 p-3 text-center transition-colors ${
+        <div className="mb-4 flex gap-2">
+          <div className={`flex-1 min-w-0 rounded-lg border-2 p-2.5 text-center transition-colors ${
             myReady ? "border-green-500 bg-green-50" : "border-gray-200"
           }`}>
-            <div className="text-xs text-gray-500">{myFirst} (You)</div>
+            <div className="text-xs text-gray-500 truncate">{myFirst} (You)</div>
             <div className="mt-1">
               {myReady ? (
                 <Check className="mx-auto h-5 w-5 text-green-600" />
               ) : (
-                <span className="text-xs text-gray-400">Waiting for you</span>
+                <span className="text-xs text-gray-400">Waiting</span>
               )}
             </div>
           </div>
-          <div className={`flex-1 rounded-lg border-2 p-3 text-center transition-colors ${
+          <div className={`flex-1 min-w-0 rounded-lg border-2 p-2.5 text-center transition-colors ${
             theirReady ? "border-green-500 bg-green-50" : "border-gray-200"
           }`}>
-            <div className="text-xs text-gray-500">{theirFirst}</div>
+            <div className="text-xs text-gray-500 truncate">{theirFirst}</div>
             <div className="mt-1">
               {theirReady ? (
                 <Check className="mx-auto h-5 w-5 text-green-600" />
@@ -89,22 +89,22 @@ function ReadyCheckOverlay({
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <Button
             variant="outline"
             onClick={onLeave}
-            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-            size="lg"
+            className="shrink-0 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
           >
-            Leave Debate
+            Leave
           </Button>
           <Button
             onClick={onReady}
             disabled={myReady || isLoading}
-            className="flex-1"
-            size="lg"
+            className="flex-1 min-w-0"
           >
-            {myReady ? `Waiting for ${theirFirst}...` : isLoading ? "Loading..." : "I'm Ready"}
+            <span className="truncate">
+              {myReady ? `Waiting for ${theirFirst}...` : isLoading ? "Loading..." : "I'm Ready"}
+            </span>
           </Button>
         </div>
       </div>
