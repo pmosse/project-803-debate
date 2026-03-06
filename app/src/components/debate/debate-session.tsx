@@ -182,6 +182,23 @@ export function DebateSession({
 
       if (session.status === "completed") {
         store.setPhase("completed");
+      } else if (session.status === "active") {
+        // Debate already in progress (e.g. page refresh) — skip consent, rejoin
+        const myConsent = studentRole === "A" ? session.consentA : session.consentB;
+        if (myConsent) {
+          setConsentGiven(true);
+          // Fetch Daily.co token to rejoin video
+          const tokenRes = await fetch(`/api/debates/${pairingId}/token`);
+          if (tokenRes.ok) {
+            const { token } = await tokenRes.json();
+            setDailyToken(token);
+          }
+          // Phase will be synced via WS sync message from moderator backend
+          // Set to opening_a as fallback; WS sync will correct it
+          store.setPhase("opening_a");
+        } else {
+          store.setPhase("consent");
+        }
       } else {
         store.setPhase("consent");
       }
@@ -264,7 +281,7 @@ export function DebateSession({
         }
       } else if (data.type === "sync") {
         const phase = data.phase as DebatePhase;
-        if (phase && phase !== "opening_a") {
+        if (phase) {
           store.syncPhase(phase, data.elapsed || 0);
         }
       } else if (data.type === "ready_check") {
@@ -449,7 +466,10 @@ export function DebateSession({
     return <DebateDebrief pairingId={pairingId} />;
   }
 
+  // Show debate UI once consent is given (even while waiting for opponent)
   const isActiveDebate = store.phase !== "consent";
+  const isLobby = store.phase === "consent" && consentGiven;
+  const showDebateUi = isActiveDebate || isLobby;
 
   const isMySpeakingTurn =
     (store.phase.endsWith("_a") && studentRole === "A") ||
@@ -484,26 +504,36 @@ export function DebateSession({
         />
       )}
 
-      {/* Phase timeline */}
-      {isActiveDebate && (
+      {/* Phase timeline — shown in lobby (waiting for opponent) and during debate */}
+      {showDebateUi && (
         <PhaseTimeline
-          currentPhase={store.phase}
+          currentPhase={isLobby ? "opening_a" : store.phase}
           nameA={studentRole === "A" ? studentName : opponentName}
           nameB={studentRole === "B" ? studentName : opponentName}
         />
       )}
 
+      {/* Lobby banner — waiting for opponent after consent */}
+      {isLobby && (
+        <div className="flex items-center justify-center gap-2 bg-blue-50 border-b border-blue-200 px-4 py-3">
+          <Loader2 className="h-4 w-4 animate-spin text-[#1D4F91]" />
+          <p className="text-sm text-[#1D4F91]">
+            Waiting for your opponent to join...
+          </p>
+        </div>
+      )}
+
       {/* AI strip — between timeline and video */}
-      {isActiveDebate && (
+      {showDebateUi && (
         <AiStrip
-          phase={store.phase}
+          phase={isLobby ? "opening_a" : store.phase}
           studentRole={studentRole}
           studentName={studentName}
           opponentName={opponentName}
           opponentThesis={opponentThesis}
           opponentClaims={opponentClaims}
           interventions={store.interventions}
-          timeRemaining={store.timeRemaining}
+          timeRemaining={isLobby ? PHASE_CONFIG.opening_a.duration : store.timeRemaining}
           isGracePeriod={store.isGracePeriod}
         />
       )}
