@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ImpersonateButton } from "@/components/instructor/impersonate-button";
+import { FileDown } from "lucide-react";
 
 export default async function InstructorStudentsPage() {
   const session = await auth();
@@ -84,6 +85,7 @@ export default async function InstructorStudentsPage() {
 
     return {
       student,
+      memos: studentMemos,
       memoCount: studentMemos.length,
       analyzedCount: analyzedMemos.length,
       pairingCount: studentPairings.length,
@@ -117,7 +119,7 @@ export default async function InstructorStudentsPage() {
               </tr>
             </thead>
             <tbody>
-              {studentData.map(({ student, analyzedCount, memoCount, completedCount, pairingCount }) => (
+              {studentData.map(({ student, memos: studentMemos, analyzedCount, memoCount, completedCount, pairingCount }) => (
                 <tr key={student.id} className="border-b last:border-0">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
@@ -142,7 +144,19 @@ export default async function InstructorStudentsPage() {
                     {studentClassMap[student.id]?.join(", ") || "—"}
                   </td>
                   <td className="p-4 text-sm text-gray-600">
-                    {analyzedCount}/{memoCount > 0 ? memoCount : courseAssignments.length} analyzed
+                    <div className="flex items-center gap-2">
+                      <span>{analyzedCount}/{memoCount > 0 ? memoCount : courseAssignments.length} analyzed</span>
+                      {studentMemos.filter((m) => m.filePath).map((m) => (
+                        <a
+                          key={m.id}
+                          href={`/api/memos/${m.id}/download`}
+                          title="Download memo PDF"
+                          className="text-gray-400 hover:text-[#1D4F91] transition-colors"
+                        >
+                          <FileDown className="h-4 w-4" />
+                        </a>
+                      ))}
+                    </div>
                   </td>
                   <td className="p-4 text-sm text-gray-600">
                     {completedCount}/{pairingCount} completed
