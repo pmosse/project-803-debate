@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Bot, BookOpen, AlertTriangle, MessageCircle } from "lucide-react";
+import { Bot, BookOpen, AlertTriangle, MessageCircle, Loader2 } from "lucide-react";
 import { PHASE_CONFIG, type DebatePhase, type AiIntervention } from "@/lib/hooks/use-debate-store";
 import { getPhaseInstructions } from "./ai-coach-panel";
 
@@ -61,8 +61,10 @@ export function AiStrip({
   isGracePeriod,
 }: AiStripProps) {
   const [activeIntervention, setActiveIntervention] = useState<AiIntervention | null>(null);
+  const [phasePrompt, setPhasePrompt] = useState<string | null>(null);
   const lastInterventionIdRef = useRef<number>(0);
   const lastPhaseRef = useRef<string>(phase);
+  const phaseStartedAtRef = useRef<number>(Date.now());
 
   // Watch for new non-phase_prompt interventions — sticky until replaced
   useEffect(() => {
@@ -74,11 +76,24 @@ export function AiStrip({
     setActiveIntervention(latest);
   }, [interventions]);
 
-  // Clear intervention on phase change
+  // Track phase_prompt for current phase (AI-generated context-aware suggestion)
+  useEffect(() => {
+    const cutoff = phaseStartedAtRef.current;
+    const currentPhasePrompts = interventions.filter(
+      (i) => i.type === "phase_prompt" && i.timestamp >= cutoff
+    );
+    if (currentPhasePrompts.length > 0) {
+      setPhasePrompt(currentPhasePrompts[currentPhasePrompts.length - 1].message);
+    }
+  }, [interventions]);
+
+  // Clear intervention and phase prompt on phase change
   useEffect(() => {
     if (phase !== lastPhaseRef.current) {
       lastPhaseRef.current = phase;
+      phaseStartedAtRef.current = Date.now();
       setActiveIntervention(null);
+      setPhasePrompt(null);
     }
   }, [phase]);
 
@@ -93,17 +108,32 @@ export function AiStrip({
   const theirFirst = opponentName.split(" ")[0];
   const instructions = getPhaseInstructions(phase, opponentThesis, opponentClaims);
 
+  const isRebuttalPhase = phase === "rebuttal_a" || phase === "rebuttal_b";
+
   // Determine what to show
   let message: string;
   let borderClass: string;
   let Icon = Bot;
   let label: string;
+  let isLoading = false;
 
   if (activeIntervention) {
     message = activeIntervention.message;
     borderClass = INTERVENTION_BORDER[activeIntervention.type] || "border-l-blue-500";
     Icon = INTERVENTION_ICON[activeIntervention.type] || Bot;
     label = "AI Moderator";
+  } else if (isRebuttalPhase && isMyTurn) {
+    // For rebuttal phases, show AI-generated context-aware suggestion from phase_prompt
+    if (phasePrompt) {
+      message = phasePrompt;
+      borderClass = "border-l-[#1D4F91]";
+      label = `${myFirst}, your turn`;
+    } else {
+      message = "";
+      isLoading = true;
+      borderClass = "border-l-[#1D4F91]";
+      label = `${myFirst}, your turn`;
+    }
   } else if (instructions) {
     message = isMyTurn ? instructions.you : instructions.opponent;
     borderClass = isMyTurn ? "border-l-[#1D4F91]" : "border-l-gray-400";
@@ -134,7 +164,14 @@ export function AiStrip({
           </span>
         )}
       </div>
-      <p className="text-sm leading-snug text-gray-700">{message}</p>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Generating suggestions based on cross-examination...</span>
+        </div>
+      ) : (
+        <p className="text-sm leading-snug text-gray-700">{message}</p>
+      )}
     </div>
   );
 }

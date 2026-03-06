@@ -154,6 +154,11 @@ export function DebateSession({
   // (i.e., the store set readyCheck but no server message yet)
   useEffect(() => {
     if (store.readyCheck && !store.readyCheckMessage && !readyCheckSentRef.current) {
+      // Only the speaking student sends ready_check_start to avoid duplicate summaries
+      const isSpeaker =
+        (store.phase.endsWith("_a") && studentRole === "A") ||
+        (store.phase.endsWith("_b") && studentRole === "B");
+      if (!isSpeaker) return;
       readyCheckSentRef.current = true;
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -168,7 +173,7 @@ export function DebateSession({
     if (!store.readyCheck) {
       readyCheckSentRef.current = false;
     }
-  }, [store.readyCheck, store.readyCheckMessage, store.readyCheckNextPhase, store.phase]);
+  }, [store.readyCheck, store.readyCheckMessage, store.readyCheckNextPhase, store.phase, studentRole]);
 
   // Initialize session
   useEffect(() => {
