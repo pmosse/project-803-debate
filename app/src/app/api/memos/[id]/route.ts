@@ -75,7 +75,7 @@ export async function DELETE(
     );
   }
 
-  await db.delete(aiUsage).where(eq(aiUsage.memoId, id));
+  await db.update(aiUsage).set({ memoId: null }).where(eq(aiUsage.memoId, id));
   await db.delete(memos).where(eq(memos.id, id));
 
   return NextResponse.json({ ok: true });
