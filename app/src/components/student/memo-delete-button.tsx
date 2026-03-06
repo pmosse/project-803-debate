@@ -12,7 +12,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-export function MemoDeleteButton({ memoId }: { memoId: string }) {
+export function MemoDeleteButton({ memoId, studentName }: { memoId: string; studentName?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -50,7 +50,9 @@ export function MemoDeleteButton({ memoId }: { memoId: string }) {
           <DialogHeader>
             <DialogTitle>Remove Memo</DialogTitle>
             <DialogDescription>
-              This will remove your uploaded memo. You can upload a new one after.
+              {studentName
+                ? `This will permanently delete ${studentName}'s memo. They will need to upload a new one.`
+                : "This will remove your uploaded memo. You can upload a new one after."}
             </DialogDescription>
           </DialogHeader>
           {error && <p className="text-sm text-red-600">{error}</p>}

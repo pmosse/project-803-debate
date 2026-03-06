@@ -24,6 +24,7 @@ import { ImpersonateButton } from "@/components/instructor/impersonate-button";
 import { SignupLinkCard } from "@/components/instructor/signup-link-card";
 import { AutoRefresh } from "@/components/instructor/auto-refresh";
 import { Users as UsersIcon, FileText, FileDown } from "lucide-react";
+import { MemoDeleteButton } from "@/components/student/memo-delete-button";
 
 export default async function InstructorAssignmentDetail({
   params,
@@ -228,6 +229,7 @@ export default async function InstructorAssignmentDetail({
                               <FileDown className="h-4 w-4" />
                             </a>
                           )}
+                          {memo && <MemoDeleteButton memoId={memo.id} studentName={student.name} />}
                         </div>
                       </td>
                       <td className="p-4 text-sm">

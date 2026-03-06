@@ -17,6 +17,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { EvaluationRadar } from "@/components/instructor/evaluation-radar";
 import { CriteriaScoresDisplay } from "@/components/instructor/criteria-scores-display";
 import { ArrowLeft, FileDown } from "lucide-react";
+import { MemoDeleteButton } from "@/components/student/memo-delete-button";
 
 export default async function InstructorStudentDetail({
   params,
@@ -174,6 +175,7 @@ export default async function InstructorStudentDetail({
                                 <FileDown className="h-4 w-4" />
                               </a>
                             )}
+                            <MemoDeleteButton memoId={memo.id} studentName={student.name} />
                           </div>
                           {memo.positionBinary && (
                             <Badge
@@ -353,6 +355,7 @@ async function SingleAssignmentView({
                     <FileDown className="h-4 w-4" />
                   </a>
                 )}
+                {memo && <MemoDeleteButton memoId={memo.id} studentName={student.name} />}
               </div>
             </CardTitle>
           </CardHeader>
