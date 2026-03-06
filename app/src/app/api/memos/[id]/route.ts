@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { memos, aiUsage } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { memos, aiUsage, pairings } from "@/lib/db/schema";
+import { eq, and, or } from "drizzle-orm";
 import { isPrivilegedRole } from "@/lib/auth/roles";
 
 export async function GET(
@@ -71,6 +71,28 @@ export async function DELETE(
   ) {
     return NextResponse.json(
       { error: "Cannot delete a memo that has already been analyzed" },
+      { status: 400 }
+    );
+  }
+
+  // Block deletion if student has a pairing for this assignment
+  const [existingPairing] = await db
+    .select({ id: pairings.id })
+    .from(pairings)
+    .where(
+      and(
+        eq(pairings.assignmentId, memo.assignmentId),
+        or(
+          eq(pairings.studentAId, memo.studentId),
+          eq(pairings.studentBId, memo.studentId)
+        )
+      )
+    )
+    .limit(1);
+
+  if (existingPairing) {
+    return NextResponse.json(
+      { error: "Cannot delete memo: student has an active pairing. Reset the case first." },
       { status: 400 }
     );
   }

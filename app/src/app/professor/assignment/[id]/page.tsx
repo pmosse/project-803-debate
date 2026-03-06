@@ -229,7 +229,7 @@ export default async function InstructorAssignmentDetail({
                               <FileDown className="h-4 w-4" />
                             </a>
                           )}
-                          {memo && <MemoDeleteButton memoId={memo.id} studentName={student.name} />}
+                          {memo && !pairing && <MemoDeleteButton memoId={memo.id} studentName={student.name} />}
                         </div>
                       </td>
                       <td className="p-4 text-sm">
