@@ -148,6 +148,7 @@ export function DebateSession({
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [dailyToken, setDailyToken] = useState<string | null>(null);
   const [consentGiven, setConsentGiven] = useState(false);
+  const [tokenError, setTokenError] = useState(false);
 
   // Send ready_check_start when grace period triggers readyCheck with empty message
   // (i.e., the store set readyCheck but no server message yet)
@@ -188,14 +189,20 @@ export function DebateSession({
         if (myConsent) {
           setConsentGiven(true);
           // Fetch Daily.co token to rejoin video
-          const tokenRes = await fetch(`/api/debates/${pairingId}/token`);
-          if (tokenRes.ok) {
-            const { token } = await tokenRes.json();
-            setDailyToken(token);
+          try {
+            const tokenRes = await fetch(`/api/debates/${pairingId}/token`);
+            if (tokenRes.ok) {
+              const { token } = await tokenRes.json();
+              setDailyToken(token);
+            } else {
+              setTokenError(true);
+            }
+          } catch {
+            setTokenError(true);
           }
-          // Phase will be synced via WS sync message from moderator backend
-          // Set to opening_a as fallback; WS sync will correct it
-          store.setPhase("opening_a");
+          // Restore persisted phase if available, otherwise fallback
+          const restoredPhase = session.currentPhase as DebatePhase | null;
+          store.setPhase(restoredPhase || "opening_a");
         } else {
           store.setPhase("consent");
         }
@@ -228,9 +235,9 @@ export function DebateSession({
     return () => window.removeEventListener("beforeunload", handler);
   }, [store.phase]);
 
-  // WebSocket for AI moderator
+  // WebSocket for AI moderator — only connect after consent to prevent sync from skipping consent
   useEffect(() => {
-    if (!store.sessionId) return;
+    if (!store.sessionId || !consentGiven) return;
     const moderatorUrl = process.env.NEXT_PUBLIC_DEBATE_MODERATOR_URL;
     if (!moderatorUrl) {
       store.setConnectionStatus("disconnected");
@@ -301,7 +308,7 @@ export function DebateSession({
 
     return () => ws.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.sessionId]);
+  }, [store.sessionId, consentGiven]);
 
   // Send phase changes over WS so moderator tracks current phase
   // Skip if the phase change originated from a remote phase_advance message
@@ -317,6 +324,18 @@ export function DebateSession({
 
     ws.send(JSON.stringify({ type: "phase_command", phase: store.phase }));
   }, [store.phase]);
+
+  // Persist current phase to DB on each transition (skip waiting/consent)
+  useEffect(() => {
+    if (!store.sessionId) return;
+    if (store.phase === "waiting" || store.phase === "consent") return;
+    fetch(`/api/debates/${pairingId}/session`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPhase: store.phase }),
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.phase, store.sessionId, pairingId]);
 
   // When debate completes naturally (timer runs out on closing_b),
   // persist completion to the DB so evaluations trigger.
@@ -354,10 +373,16 @@ export function DebateSession({
     });
 
     // Fetch Daily.co token
-    const tokenRes = await fetch(`/api/debates/${pairingId}/token`);
-    if (tokenRes.ok) {
-      const { token } = await tokenRes.json();
-      setDailyToken(token);
+    try {
+      const tokenRes = await fetch(`/api/debates/${pairingId}/token`);
+      if (tokenRes.ok) {
+        const { token } = await tokenRes.json();
+        setDailyToken(token);
+      } else {
+        setTokenError(true);
+      }
+    } catch {
+      setTokenError(true);
     }
 
     // Mark consent given — join video but DON'T start timer yet.
@@ -565,8 +590,38 @@ export function DebateSession({
             currentPhase={store.phase}
           />
         ) : (
-          <div className="flex h-full items-center justify-center bg-gray-900 text-gray-400">
-            Connecting to video...
+          <div className="flex h-full flex-col items-center justify-center gap-3 bg-gray-900 text-gray-400">
+            {tokenError ? (
+              <>
+                <p className="text-red-400">Failed to connect to video</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-600 text-gray-200 hover:bg-gray-700"
+                  onClick={async () => {
+                    setTokenError(false);
+                    try {
+                      const tokenRes = await fetch(`/api/debates/${pairingId}/token`);
+                      if (tokenRes.ok) {
+                        const { token } = await tokenRes.json();
+                        setDailyToken(token);
+                      } else {
+                        setTokenError(true);
+                      }
+                    } catch {
+                      setTokenError(true);
+                    }
+                  }}
+                >
+                  Retry
+                </Button>
+              </>
+            ) : (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <p>Connecting to video...</p>
+              </>
+            )}
           </div>
         )}
       </div>

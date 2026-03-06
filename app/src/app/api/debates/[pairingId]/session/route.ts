@@ -90,6 +90,7 @@ export async function PATCH(
   if (body.phasesLog) updates.phasesLog = body.phasesLog;
   if (body.aiInterventions) updates.aiInterventions = body.aiInterventions;
   if (body.durationSeconds) updates.durationSeconds = body.durationSeconds;
+  if (body.currentPhase) updates.currentPhase = body.currentPhase;
   if (body.consentA !== undefined) updates.consentA = body.consentA;
   if (body.consentB !== undefined) updates.consentB = body.consentB;
   if (body.status === "active") updates.startedAt = new Date();

@@ -167,6 +167,7 @@ export const debateSessions = pgTable("debate_sessions", {
   >(),
   consentA: integer("consent_a").default(0),
   consentB: integer("consent_b").default(0),
+  currentPhase: text("current_phase"),
   status: debateSessionStatusEnum("status").default("waiting").notNull(),
   startedAt: timestamp("started_at"),
   endedAt: timestamp("ended_at"),

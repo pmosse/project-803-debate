@@ -145,6 +145,8 @@ export const useDebateStore = create<DebateStore>((set, get) => ({
   },
 
   syncPhase: (phase, elapsed) => {
+    // Never let a sync override the consent phase
+    if (get().phase === "consent") return;
     const config = PHASE_CONFIG[phase];
     const remaining = Math.max(0, config.duration - elapsed);
     set({
