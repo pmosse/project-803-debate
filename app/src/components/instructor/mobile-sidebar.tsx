@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X, LayoutDashboard, Users, PlusCircle, Mic, DollarSign, LogOut } from "lucide-react";
+import { Menu, X, LayoutDashboard, Users, PlusCircle, Mic, DollarSign, LogOut, Eye } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 export function MobileSidebar({ userName }: { userName: string }) {
@@ -77,6 +77,14 @@ export function MobileSidebar({ userName }: { userName: string }) {
               >
                 <Mic className="h-4 w-4" />
                 A/V Test
+              </Link>
+              <Link
+                href="/professor/debate-preview"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <Eye className="h-4 w-4" />
+                Debate Preview
               </Link>
             </nav>
 

@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { LayoutDashboard, Mic, PlusCircle, Users, DollarSign, HelpCircle } from "lucide-react";
+import { LayoutDashboard, Mic, PlusCircle, Users, DollarSign, HelpCircle, Eye } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { MobileSidebar } from "@/components/instructor/mobile-sidebar";
 import { isPrivilegedRole } from "@/lib/auth/roles";
@@ -65,6 +65,13 @@ export default async function ProfessorLayout({
           >
             <Mic className="h-4 w-4" />
             A/V Test
+          </Link>
+          <Link
+            href="/professor/debate-preview"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <Eye className="h-4 w-4" />
+            Debate Preview
           </Link>
           <div className="my-2 border-t border-white/10" />
           <Link
