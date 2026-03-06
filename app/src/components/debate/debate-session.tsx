@@ -561,6 +561,21 @@ export function DebateSession({
         />
       )}
 
+      {/* AI strip — between timeline and video */}
+      {isActiveDebate && (
+        <AiStrip
+          phase={store.phase}
+          studentRole={studentRole}
+          studentName={studentName}
+          opponentName={opponentName}
+          opponentThesis={opponentThesis}
+          opponentClaims={opponentClaims}
+          interventions={store.interventions}
+          timeRemaining={store.timeRemaining}
+          isGracePeriod={store.isGracePeriod}
+        />
+      )}
+
       {/* Paused banner */}
       {store.isPaused && (
         <div className="flex items-center justify-center gap-2 bg-yellow-500 px-3 py-1.5 text-sm font-medium text-white">
@@ -570,7 +585,7 @@ export function DebateSession({
       )}
 
       {/* Video area */}
-      <div className="min-h-0 flex-1 max-h-[45vh]">
+      <div className="min-h-0 flex-1 max-h-[40vh]">
         {dailyToken && roomUrl ? (
           <DailyCall
             roomUrl={roomUrl}
@@ -593,21 +608,6 @@ export function DebateSession({
           </div>
         )}
       </div>
-
-      {/* AI strip — light box below video */}
-      {isActiveDebate && (
-        <AiStrip
-          phase={store.phase}
-          studentRole={studentRole}
-          studentName={studentName}
-          opponentName={opponentName}
-          opponentThesis={opponentThesis}
-          opponentClaims={opponentClaims}
-          interventions={store.interventions}
-          timeRemaining={store.timeRemaining}
-          isGracePeriod={store.isGracePeriod}
-        />
-      )}
 
       {/* Controls bar — mic, cam, +1min, skip, hangup */}
       <div className="flex items-center justify-center gap-3 bg-gray-900 px-4 py-2.5">
