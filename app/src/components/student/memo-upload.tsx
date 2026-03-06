@@ -87,7 +87,9 @@ export function MemoUpload({ assignmentId }: MemoUploadProps) {
             <FileText className="h-8 w-8 text-[#1D4F91]" />
             <p className="text-sm font-medium">{selectedFile.name}</p>
             <p className="text-xs text-gray-500">
-              {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+              {selectedFile.size < 1024 * 1024
+                ? `${(selectedFile.size / 1024).toFixed(0)} KB`
+                : `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`}
             </p>
           </div>
         ) : (
