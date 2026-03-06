@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { memos } from "@/lib/db/schema";
+import { memos, aiUsage } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { isPrivilegedRole } from "@/lib/auth/roles";
 
@@ -75,6 +75,7 @@ export async function DELETE(
     );
   }
 
+  await db.delete(aiUsage).where(eq(aiUsage.memoId, id));
   await db.delete(memos).where(eq(memos.id, id));
 
   return NextResponse.json({ ok: true });
