@@ -23,7 +23,7 @@ import { ResetDebateButton } from "@/components/instructor/reset-debate-button";
 import { ImpersonateButton } from "@/components/instructor/impersonate-button";
 import { SignupLinkCard } from "@/components/instructor/signup-link-card";
 import { AutoRefresh } from "@/components/instructor/auto-refresh";
-import { Users as UsersIcon, FileText } from "lucide-react";
+import { Users as UsersIcon, FileText, FileDown } from "lucide-react";
 
 export default async function InstructorAssignmentDetail({
   params,
@@ -215,9 +215,20 @@ export default async function InstructorAssignmentDetail({
                         {student.name}
                       </td>
                       <td className="p-4">
-                        <StatusBadge
-                          status={memo?.status || "not_started"}
-                        />
+                        <div className="flex items-center gap-2">
+                          <StatusBadge
+                            status={memo?.status || "not_started"}
+                          />
+                          {memo?.filePath && (
+                            <a
+                              href={`/api/memos/${memo.id}/download`}
+                              title="Download memo PDF"
+                              className="text-gray-400 hover:text-[#1D4F91] transition-colors"
+                            >
+                              <FileDown className="h-4 w-4" />
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4 text-sm">
                         {memo?.positionBinary === "net_positive" && (
