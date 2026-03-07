@@ -39,14 +39,14 @@ export const PHASE_CONFIG: Record<
   crossexam_a: { label: "Cross-Examination — A asks B", duration: 180, next: "rebuttal_b" },
   rebuttal_b: { label: "Rebuttal — Student B", duration: 60, next: "crossexam_b" },
   crossexam_b: { label: "Cross-Examination — B asks A", duration: 180, next: "rebuttal_a" },
-  rebuttal_a: { label: "Rebuttal — Student A", duration: 60, next: "closing_a" },
-  closing_a: { label: "Closing — Student A", duration: 30, next: "closing_b" },
-  closing_b: { label: "Closing — Student B", duration: 30, next: "completed" },
+  rebuttal_a: { label: "Rebuttal — Student A", duration: 60, next: "closing_b" },
+  closing_b: { label: "Closing — Student B", duration: 30, next: "closing_a" },
+  closing_a: { label: "Closing — Student A", duration: 30, next: "completed" },
   completed: { label: "Debate Complete", duration: 0, next: null },
 };
 
 // Phases that skip ready check (first phase and last transition)
-const SKIP_READY_CHECK: Set<string> = new Set(["consent", "closing_b"]);
+const SKIP_READY_CHECK: Set<string> = new Set(["consent", "closing_a"]);
 
 const GRACE_PERIOD = 10; // seconds
 

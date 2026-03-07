@@ -7,7 +7,7 @@ export const PHASE_ORDER: DebatePhase[] = [
   "opening_a", "opening_b",
   "crossexam_a", "rebuttal_b",
   "crossexam_b", "rebuttal_a",
-  "closing_a", "closing_b",
+  "closing_b", "closing_a",
 ];
 
 export const PHASE_LABELS: Record<string, string> = {
