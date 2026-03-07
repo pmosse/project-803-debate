@@ -16,8 +16,10 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EvaluationRadar } from "@/components/instructor/evaluation-radar";
 import { CriteriaScoresDisplay } from "@/components/instructor/criteria-scores-display";
-import { ArrowLeft } from "lucide-react";
+
 import { isPrivilegedRole } from "@/lib/auth/roles";
+import { ReEvaluateButton } from "@/components/instructor/re-evaluate-button";
+import { BackButton } from "@/components/instructor/back-button";
 
 export default async function DebateDetailPage({
   params,
@@ -186,13 +188,7 @@ export default async function DebateDetailPage({
     <div>
       {/* Header */}
       <div className="mb-6">
-        <Link
-          href={`/professor/assignment/${pairing.assignmentId}?tab=results`}
-          className="mb-3 inline-flex items-center gap-1 text-sm text-[#1D4F91] hover:underline"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to results
-        </Link>
+        <BackButton fallbackHref={`/professor/assignment/${pairing.assignmentId}?tab=results`} label="Back" />
         <h1 className="text-2xl font-bold text-gray-900">
           {nameA} vs {nameB}
         </h1>
@@ -203,6 +199,11 @@ export default async function DebateDetailPage({
             <span>{Math.round(debateSession.durationSeconds / 60)} min</span>
           )}
         </div>
+        {debateSession?.status === "completed" && (
+          <div className="mt-3">
+            <ReEvaluateButton pairingId={pairingId} />
+          </div>
+        )}
       </div>
 
       {/* Evaluations side by side */}

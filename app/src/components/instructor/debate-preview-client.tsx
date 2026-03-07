@@ -8,8 +8,9 @@ import { PhaseOverlay } from "@/components/debate/phase-overlay";
 import { Button } from "@/components/ui/button";
 import {
   Mic, MicOff, Video, VideoOff, PhoneOff, SkipForward,
-  Clock, Pause, Play, RotateCcw, Eye,
+  Clock, Pause, Play, RotateCcw, Eye, ArrowLeft,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { DebatePhase } from "@/lib/hooks/use-debate-store";
 
 const MOCK_NAME_A = "You (Student A)";
@@ -46,6 +47,7 @@ const MOCK_INTERVENTIONS: { phase: DebatePhase; delay: number; type: string; mes
 
 export function DebatePreviewClient() {
   const store = useDebateStore();
+  const router = useRouter();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const interventionTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [micEnabled, setMicEnabled] = useState(true);
@@ -144,7 +146,7 @@ export function DebatePreviewClient() {
   // Completed state
   if (store.phase === "completed") {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
+      <div className="fixed inset-0 z-30 flex items-center justify-center bg-gray-900">
         <div className="rounded-xl bg-white p-8 shadow-md text-center max-w-md">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Preview Complete</h2>
           <p className="text-sm text-gray-500 mb-6">
@@ -165,186 +167,222 @@ export function DebatePreviewClient() {
     isActiveDebate && PHASE_CONFIG[store.phase].duration > 0 && !store.readyCheck;
 
   return (
-    <div className="flex flex-col -mx-4 md:mx-0">
+    <div className="fixed inset-0 z-30 flex flex-col bg-gray-900">
       {/* Header banner */}
-      <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 sm:px-4 py-2 mb-3 sm:mb-4 mx-4 md:mx-0">
-        <Eye className="h-4 w-4 text-amber-600 shrink-0" />
-        <p className="text-xs sm:text-sm text-amber-800">
-          <strong>Debate Preview</strong> — This is a simulation of the student debate experience. No real video, audio, or AI moderation is running.
+      <div className="flex items-center gap-2 bg-amber-50 px-3 sm:px-4 py-1.5">
+        <button
+          onClick={() => router.push("/professor/dashboard")}
+          className="flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900 shrink-0"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back
+        </button>
+        <div className="mx-1 h-4 w-px bg-amber-300" />
+        <Eye className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+        <p className="text-xs text-amber-800">
+          <strong>Debate Preview</strong> — Simulation of the student experience. No real video or AI.
         </p>
       </div>
 
-      <div className="flex flex-col md:rounded-xl md:overflow-hidden shadow-md md:border border-gray-200 bg-gray-900">
-        {/* Ready check overlay */}
-        {store.readyCheck && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md rounded-xl bg-white p-5 sm:p-6 shadow-2xl">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Phase Transition</h3>
-              {!store.readyCheckMessage ? (
-                <p className="mb-4 text-sm text-gray-500">Generating phase summary...</p>
-              ) : (
-                <>
-                  {store.readyCheckSummary && (
-                    <div className="mb-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
-                      <p className="text-sm text-blue-800 leading-relaxed">{store.readyCheckSummary}</p>
-                    </div>
-                  )}
-                  <p className="mb-4 text-sm text-gray-600 leading-relaxed">{store.readyCheckMessage}</p>
-                </>
-              )}
-              <Button
-                onClick={handleReadyClick}
-                disabled={!store.readyCheckMessage}
-                className="w-full"
-              >
-                {store.readyCheckMessage ? "Continue to Next Phase" : "Loading..."}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Phase overlay */}
-        {store.showPhaseOverlay && (
-          <PhaseOverlay
-            phase={store.phase}
-            nameA={MOCK_NAME_A}
-            nameB={MOCK_NAME_B}
-          />
-        )}
-
-        {/* Phase timeline */}
-        {isActiveDebate && (
-          <PhaseTimeline
-            currentPhase={store.phase}
-            nameA={MOCK_NAME_A}
-            nameB={MOCK_NAME_B}
-          />
-        )}
-
-        {/* AI strip */}
-        {isActiveDebate && (
-          <AiStrip
-            phase={store.phase}
-            studentRole="A"
-            studentName={MOCK_NAME_A}
-            opponentName={MOCK_NAME_B}
-            opponentThesis={MOCK_OPPONENT_THESIS}
-            opponentClaims={MOCK_OPPONENT_CLAIMS}
-            interventions={store.interventions}
-            timeRemaining={store.timeRemaining}
-            isGracePeriod={store.isGracePeriod}
-          />
-        )}
-
-        {/* Paused banner */}
-        {store.isPaused && (
-          <div className="flex items-center justify-center gap-2 bg-yellow-500 px-3 py-1.5 text-sm font-medium text-white">
-            <Pause className="h-4 w-4" />
-            Paused — timer stopped
-          </div>
-        )}
-
-        {/* Mock video area */}
-        <div className="grid grid-cols-2 gap-2 p-2 sm:p-3 min-h-[25vh] sm:min-h-[30vh] max-h-[40vh]">
-          {/* Student A (You) */}
-          <div className="flex flex-col items-center justify-center rounded-lg bg-gray-800 border border-gray-700">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#1D4F91] text-2xl font-bold text-white">
-              Y
-            </div>
-            <p className="mt-2 text-sm font-medium text-white">You (Student A)</p>
-            <p className="text-xs text-gray-400">
-              {store.phase.endsWith("_a") ? "Speaking" : "Listening"}
-            </p>
-          </div>
-
-          {/* Student B (Opponent) */}
-          <div className="flex flex-col items-center justify-center rounded-lg bg-gray-800 border border-gray-700">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-700 text-2xl font-bold text-white">
-              S
-            </div>
-            <p className="mt-2 text-sm font-medium text-white">{MOCK_NAME_B}</p>
-            <p className="text-xs text-gray-400">
-              {store.phase.endsWith("_b") ? "Speaking" : "Listening"}
-            </p>
+      {/* Ready check overlay */}
+      {store.readyCheck && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 sm:p-6 shadow-2xl">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Phase Transition</h3>
+            {!store.readyCheckMessage ? (
+              <p className="mb-4 text-sm text-gray-500">Generating phase summary...</p>
+            ) : (
+              <>
+                {store.readyCheckSummary && (
+                  <div className="mb-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
+                    <p className="text-sm text-blue-800 leading-relaxed">{store.readyCheckSummary}</p>
+                  </div>
+                )}
+                <p className="mb-4 text-sm text-gray-600 leading-relaxed">{store.readyCheckMessage}</p>
+              </>
+            )}
+            <Button
+              onClick={handleReadyClick}
+              disabled={!store.readyCheckMessage}
+              className="w-full"
+            >
+              {store.readyCheckMessage ? "Continue to Next Phase" : "Loading..."}
+            </Button>
           </div>
         </div>
+      )}
 
-        {/* Controls bar */}
-        <div className="flex items-center justify-center gap-2 sm:gap-3 bg-gray-900 px-3 sm:px-4 py-2 sm:py-2.5">
-          <Button
-            variant={micEnabled ? "outline" : "destructive"}
-            size="icon"
-            onClick={() => setMicEnabled(!micEnabled)}
-            className={micEnabled ? "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700" : ""}
-          >
-            {micEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-          </Button>
-          <Button
-            variant={camEnabled ? "outline" : "destructive"}
-            size="icon"
-            onClick={() => setCamEnabled(!camEnabled)}
-            className={camEnabled ? "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700" : ""}
-          >
-            {camEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
-          </Button>
+      {/* Phase overlay */}
+      {store.showPhaseOverlay && (
+        <PhaseOverlay
+          phase={store.phase}
+          nameA={MOCK_NAME_A}
+          nameB={MOCK_NAME_B}
+        />
+      )}
 
-          {showTimedControls && (
-            <>
-              <div className="mx-1 h-6 w-px bg-gray-700" />
+      {/* Phase timeline */}
+      {isActiveDebate && (
+        <PhaseTimeline
+          currentPhase={store.phase}
+          nameA={MOCK_NAME_A}
+          nameB={MOCK_NAME_B}
+        />
+      )}
+
+      {/* AI strip */}
+      {isActiveDebate && (
+        <AiStrip
+          phase={store.phase}
+          studentRole="A"
+          studentName={MOCK_NAME_A}
+          opponentName={MOCK_NAME_B}
+          opponentThesis={MOCK_OPPONENT_THESIS}
+          opponentClaims={MOCK_OPPONENT_CLAIMS}
+          interventions={store.interventions}
+          timeRemaining={store.timeRemaining}
+          isGracePeriod={store.isGracePeriod}
+        />
+      )}
+
+      {/* Paused banner */}
+      {store.isPaused && (
+        <div className="flex items-center justify-center gap-2 bg-yellow-500 px-3 py-1.5 text-sm font-medium text-white">
+          <Pause className="h-4 w-4" />
+          Paused — timer stopped
+        </div>
+      )}
+
+      {/* Mock video area — Google Meet style */}
+      <div className="min-h-0 flex-1 relative overflow-hidden">
+        {store.isPaused ? (
+          /* Paused: 50/50 split */
+          <div className="grid h-full grid-cols-2 gap-2 p-2">
+            {/* Opponent */}
+            <div className="flex flex-col items-center justify-center rounded-lg bg-gray-800 border border-gray-700">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-700 text-3xl font-bold text-white">
+                S
+              </div>
+              <p className="mt-3 text-sm font-medium text-white">{MOCK_NAME_B}</p>
+              <p className="text-xs text-gray-400">
+                {store.phase.endsWith("_b") ? "Speaking" : "Listening"}
+              </p>
+            </div>
+            {/* Self */}
+            <div className="flex flex-col items-center justify-center rounded-lg bg-gray-800 border border-gray-700">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#1D4F91] text-3xl font-bold text-white">
+                Y
+              </div>
+              <p className="mt-3 text-sm font-medium text-white">You (Student A)</p>
+              <p className="text-xs text-gray-400">
+                {store.phase.endsWith("_a") ? "Speaking" : "Listening"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* Active: opponent big, self PiP */
+          <div className="h-full p-2">
+            {/* Big — opponent */}
+            <div className="relative flex h-full flex-col items-center justify-center rounded-lg bg-gray-800 border border-gray-700">
+              <div className={`flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center rounded-full bg-emerald-700 text-4xl font-bold text-white ${
+                store.phase.endsWith("_b") ? "ring-4 ring-yellow-400" : ""
+              }`}>
+                S
+              </div>
+              <p className="mt-3 text-base font-medium text-white">{MOCK_NAME_B}</p>
+              <p className="text-sm text-gray-400">
+                {store.phase.endsWith("_b") ? "Speaking" : "Listening"}
+              </p>
+
+              {/* PiP — self, bottom-right corner */}
+              <div className="absolute bottom-3 right-3 w-[100px] sm:w-[140px] aspect-[4/3] overflow-hidden rounded-lg border-2 border-white/20 bg-gray-900 shadow-lg flex flex-col items-center justify-center">
+                <div className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-[#1D4F91] text-lg font-bold text-white ${
+                  store.phase.endsWith("_a") ? "ring-2 ring-yellow-400" : ""
+                }`}>
+                  Y
+                </div>
+                <p className="mt-1 text-[10px] sm:text-xs text-gray-300">You</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Controls bar */}
+      <div className="flex items-center justify-center gap-2 sm:gap-3 bg-gray-900 px-3 sm:px-4 py-2 sm:py-2.5">
+        <Button
+          variant={micEnabled ? "outline" : "destructive"}
+          size="icon"
+          onClick={() => setMicEnabled(!micEnabled)}
+          className={micEnabled ? "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700" : ""}
+        >
+          {micEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+        </Button>
+        <Button
+          variant={camEnabled ? "outline" : "destructive"}
+          size="icon"
+          onClick={() => setCamEnabled(!camEnabled)}
+          className={camEnabled ? "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700" : ""}
+        >
+          {camEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+        </Button>
+
+        {showTimedControls && (
+          <>
+            <div className="mx-1 h-6 w-px bg-gray-700" />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleTogglePause}
+              className={store.isPaused
+                ? "border-yellow-500 bg-yellow-600 text-white hover:bg-yellow-500"
+                : "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
+              }
+              title={store.isPaused ? "Resume" : "Pause"}
+            >
+              {store.isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleAddTime}
+              className="border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
+              title="+1 minute"
+            >
+              <Clock className="h-4 w-4" />
+            </Button>
+            {PHASE_CONFIG[store.phase].next && PHASE_CONFIG[store.phase].next !== "completed" && (
               <Button
                 variant="outline"
                 size="icon"
-                onClick={handleTogglePause}
-                className={store.isPaused
-                  ? "border-yellow-500 bg-yellow-600 text-white hover:bg-yellow-500"
-                  : "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
-                }
-                title={store.isPaused ? "Resume" : "Pause"}
-              >
-                {store.isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleAddTime}
+                onClick={handleSkip}
                 className="border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
-                title="+1 minute"
+                title="Skip to next phase"
               >
-                <Clock className="h-4 w-4" />
+                <SkipForward className="h-4 w-4" />
               </Button>
-              {PHASE_CONFIG[store.phase].next && PHASE_CONFIG[store.phase].next !== "completed" && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleSkip}
-                  className="border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
-                  title="Skip to next phase"
-                >
-                  <SkipForward className="h-4 w-4" />
-                </Button>
-              )}
-            </>
-          )}
+            )}
+          </>
+        )}
 
-          <div className="mx-1 h-6 w-px bg-gray-700" />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleReset}
-            className="border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
-            title="Restart preview"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="destructive"
-            size="icon"
-            onClick={() => store.setPhase("completed")}
-            title="End preview"
-          >
-            <PhoneOff className="h-4 w-4" />
-          </Button>
-        </div>
+        <div className="mx-1 h-6 w-px bg-gray-700" />
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={handleReset}
+          className="border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
+          title="Restart preview"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="destructive"
+          size="icon"
+          onClick={() => store.setPhase("completed")}
+          title="End preview"
+        >
+          <PhoneOff className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );

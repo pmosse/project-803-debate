@@ -213,7 +213,12 @@ export default async function InstructorAssignmentDetail({
                   {studentData.map(({ student, memo, pairing }) => (
                     <tr key={student.id} className="border-b last:border-0">
                       <td className="p-4 text-sm font-medium">
-                        {student.name}
+                        <Link
+                          href={`/professor/student/${student.id}?assignment=${id}`}
+                          className="text-[#1D4F91] hover:underline"
+                        >
+                          {student.name}
+                        </Link>
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">

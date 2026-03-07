@@ -16,8 +16,10 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EvaluationRadar } from "@/components/instructor/evaluation-radar";
 import { CriteriaScoresDisplay } from "@/components/instructor/criteria-scores-display";
-import { ArrowLeft, FileDown } from "lucide-react";
+import { FileDown } from "lucide-react";
 import { MemoDeleteButton } from "@/components/student/memo-delete-button";
+import { EditableEmail } from "@/components/instructor/editable-email";
+import { BackButton } from "@/components/instructor/back-button";
 
 export default async function InstructorStudentDetail({
   params,
@@ -96,13 +98,7 @@ export default async function InstructorStudentDetail({
   return (
     <div>
       <div className="mb-6">
-        <Link
-          href="/professor/students"
-          className="mb-3 inline-flex items-center gap-1 text-sm text-[#1D4F91] hover:underline"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to students
-        </Link>
+        <BackButton fallbackHref="/professor/students" label="Back" />
         <div className="flex items-center gap-3">
           {student.photoPath ? (
             <img
@@ -117,7 +113,7 @@ export default async function InstructorStudentDetail({
           )}
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
-            <p className="text-sm text-gray-500">{student.email || "No email"}</p>
+            <EditableEmail studentId={id} initialEmail={student.email || ""} />
           </div>
         </div>
       </div>
@@ -328,15 +324,9 @@ async function SingleAssignmentView({
   return (
     <div>
       <div className="mb-6">
-        <Link
-          href={`/professor/student/${studentId}`}
-          className="mb-3 inline-flex items-center gap-1 text-sm text-[#1D4F91] hover:underline"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to student overview
-        </Link>
+        <BackButton fallbackHref={`/professor/student/${studentId}`} label="Back" />
         <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
-        <p className="text-sm text-gray-500">{student.email || "No email"}</p>
+        <EditableEmail studentId={studentId} initialEmail={student.email || ""} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

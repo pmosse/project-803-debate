@@ -137,6 +137,22 @@ def score_student(
         lines = text.split("\n")
         text = "\n".join(lines[1:-1])
 
+    # Extract JSON object even if Claude adds extra text after it
+    start = text.find("{")
+    if start == -1:
+        raise ValueError(f"No JSON object found in response: {text[:200]}")
+    depth = 0
+    end = start
+    for i, ch in enumerate(text[start:], start):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    text = text[start:end]
+
     scores = json.loads(text)
 
     # Validate and default
